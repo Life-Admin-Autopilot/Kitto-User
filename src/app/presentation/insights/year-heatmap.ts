@@ -32,17 +32,25 @@ const STEP = CELL + GAP;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="mb-3 flex flex-wrap items-center gap-2">
-      <div class="flex rounded-pill bg-surface-sunken p-0.5">
+      <!--
+        The selected pill is accent-soft, not surface. On the dark card,
+        surface-sunken and surface differ by 4/255 — the track had no visible
+        edge and the selected option was the same colour as the card behind it,
+        so the control was invisible and there was no way to tell which question
+        the grid was answering. The hairline border and the accent fill are both
+        there to survive that theme.
+      -->
+      <div class="flex rounded-pill border border-hairline bg-surface-sunken p-0.5">
         @for (option of modes; track option.value) {
           <button
             type="button"
             (click)="modeChange.emit(option.value)"
             [attr.aria-pressed]="mode() === option.value"
             class="rounded-pill px-2.5 py-1 text-micro transition-colors"
-            [class.bg-surface]="mode() === option.value"
-            [class.text-ink]="mode() === option.value"
+            [class.bg-accent-soft]="mode() === option.value"
+            [class.text-accent]="mode() === option.value"
+            [class.font-semibold]="mode() === option.value"
             [class.text-ink-muted]="mode() !== option.value"
-            [class.shadow-card]="mode() === option.value"
           >
             {{ option.label }}
           </button>
@@ -67,7 +75,11 @@ const STEP = CELL + GAP;
 
         <div class="flex gap-[3px]">
           <!-- Weekday gutter. Alternate rows only: seven stacked 11px labels
-               collide, and Mon/Wed/Fri is enough to orient a reader. -->
+               collide, and every other one is enough to orient a reader. Rows
+               0/2/4/6 — the FIRST weekday and every other one after it, so an
+               en-GB grid reads Mon/Wed/Fri/Sun. Labelling the odd rows instead
+               started at row 1, giving Tue/Thu/Sat: still legible, but anchored
+               a day off from the weekday the columns actually begin on. -->
           <div class="flex flex-col gap-[3px]" [style.width.px]="gutter - 4">
             @for (day of grid().weekdays; track $index; let i = $index) {
               <span
@@ -75,7 +87,7 @@ const STEP = CELL + GAP;
                 [style.height.px]="cell"
                 [style.line-height.px]="cell"
               >
-                {{ i % 2 === 1 ? day : '' }}
+                {{ i % 2 === 0 ? day : '' }}
               </span>
             }
           </div>
@@ -165,8 +177,10 @@ export class YearHeatmap {
     if (!cell.inRange) return 0;
     // An empty day is a faint ghost of the grid, not a solid block: the
     // structure has to be visible without competing with the days that carry
-    // data.
-    if (cell.count === 0) return 0.35;
+    // data. 0.45 rather than 0.35 — rendered against the dark card, the lower
+    // value left the grid barely there, and a heatmap whose empty cells vanish
+    // is just scattered dots with nothing to locate them against.
+    if (cell.count === 0) return 0.45;
     if (cell.count === 1) return 0.6;
     if (cell.count < 4) return 0.8;
     return 1;

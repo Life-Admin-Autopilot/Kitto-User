@@ -157,6 +157,15 @@
   --radius-tile: 14px;
   --radius-pill: 9999px;
 
+  /*
+   * ---- Scrim — the wash behind a dialog ----
+   * A token rather than `bg-ink/20`, because ink INVERTS between themes: in dark
+   * it is near-white, so an ink wash brightened the backdrop above the dialog's
+   * own fill and the modal read as a hole punched in a lit page. A scrim always
+   * darkens, in both themes, so it needs its own value.
+   */
+  --color-scrim: rgb(28 26 23 / 0.28);
+
   /* ---- Shadows — whisper-soft and diffuse, never a hard edge ---- */
   --shadow-card: 0 2px 8px rgb(20 20 40 / 0.04), 0 1px 3px rgb(20 20 40 / 0.03);
   --shadow-elevated: 0 8px 28px rgb(20 20 40 / 0.08), 0 2px 6px rgb(20 20 40 / 0.05);
@@ -172,6 +181,14 @@
  * theme, not a dimmed light one.
  */
 .dark {
+  /*
+   * Tells the BROWSER the page is dark, which no custom property can. Scrollbars,
+   * form controls, the flash between navigations and the caret are painted by the
+   * UA, and without this they stay light — bright chrome around a near-black
+   * page, which is the one part of dark mode a stylesheet cannot reach.
+   */
+  color-scheme: dark;
+
   --color-canvas: rgb(3 3 3);
   --color-canvas-veined: rgb(12 12 14);
   --color-surface: rgb(20 20 22);
@@ -216,6 +233,10 @@
   --color-bucket-afternoon: rgb(40 42 64);
   --color-bucket-evening: rgb(42 39 64);
 
+  /* Heavier than light mode's: on a near-black canvas a 28% wash is not enough
+     separation for the dialog above it to read as a separate plane. */
+  --color-scrim: rgb(0 0 0 / 0.62);
+
   --shadow-card: 0 2px 8px rgb(0 0 0 / 0.4);
   --shadow-elevated: 0 10px 34px rgb(0 0 0 / 0.5);
   --shadow-halo: 0 6px 20px rgb(0 0 0 / 0.55);
@@ -224,6 +245,7 @@
 @layer base {
   html {
     font-family: var(--font-sans);
+    color-scheme: light;
   }
   body {
     margin: 0;
@@ -247,6 +269,24 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+}
+
+/*
+ * ---- Chart labels ----
+ *
+ * A label inside a chart lands on whatever the chart drew, and in a Sankey that
+ * is a saturated ribbon. Colour alone cannot solve this: any fill legible on the
+ * card is illegible on some ribbon, and vice versa.
+ *
+ * `paint-order: stroke fill` paints the outline FIRST and the glyph over it, so
+ * each character carries its own background in the card's own colour. It costs
+ * one declaration and works in both themes, because the stroke is a token.
+ */
+.chart-label {
+  paint-order: stroke fill;
+  stroke: var(--color-surface);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
 }
 
 /*

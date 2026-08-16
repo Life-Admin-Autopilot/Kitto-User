@@ -18,21 +18,28 @@ import type { ProjectionDay } from '@application/insights/insights-math';
   selector: 'app-inaction-projection',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="flex h-28 items-end gap-1">
+    <!--
+      Columns stretch to the full track height. With items-end they were sized by
+      their content — nothing — so both segments' percentage heights resolved
+      against an indefinite height and rendered at 0px: the panel was an empty
+      112px box with a caption under it.
+    -->
+    <div class="flex h-28 items-stretch gap-1">
       @for (day of days(); track day.date.getTime()) {
-        <div class="group relative flex flex-1 flex-col justify-end">
+        <div class="relative flex-1" [title]="tooltip(day)">
           <!-- Two stacked segments: what was already late (quiet) and what this
                day adds (loud). The distinction is the whole message — one is
-               history, the other is a choice being made now. -->
+               history, the other is a choice being made now. The loud one is
+               offset by the height of the quiet one, so they stack rather than
+               overlap. -->
           <div
-            class="w-full rounded-t-sm bg-warning"
-            [style.height.%]="fallingHeight(day)"
-            [title]="tooltip(day)"
+            class="absolute inset-x-0 bottom-0 bg-danger/25"
+            [style.height.%]="carriedHeight(day)"
           ></div>
           <div
-            class="w-full bg-danger/25"
-            [style.height.%]="carriedHeight(day)"
-            [title]="tooltip(day)"
+            class="absolute inset-x-0 rounded-t-sm bg-warning"
+            [style.height.%]="fallingHeight(day)"
+            [style.bottom.%]="carriedHeight(day)"
           ></div>
         </div>
       }

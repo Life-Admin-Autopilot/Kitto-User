@@ -121,6 +121,13 @@ export class InsightsStore {
    * One fetch for both. The weekly buckets are a `computed` that looks at the
    * last twelve weeks of the same array, so widening the chart later costs
    * nothing and the two views can never disagree about a day.
+   *
+   * Paged `created-desc` because the server offers no completion-ordered sort —
+   * its six sorts are due, created, priority and title. That only matters at the
+   * ceiling: an account that completes more than 1,200 matters in a year keeps
+   * the most recently CREATED of them rather than the most recently completed,
+   * which would skew the oldest weeks of the chart. `truncated` is how the page
+   * admits it, rather than drawing a confident wrong answer.
    */
   private readonly completedResource = resource({
     params: () => ({ after: this.windowStart().toISOString() }),
@@ -147,11 +154,31 @@ export class InsightsStore {
     () => this.countsResource.error() ?? this.completedResource.error() ?? this.openResource.error(),
   );
 
-  readonly truncated = computed(
-    () => this.completedResource.value().truncated || this.openResource.value().truncated,
+  /**
+   * Every read of a resource's value goes through a guard.
+   *
+   * `resource.value()` RETHROWS when the resource is in an error state — even
+   * with a `defaultValue` — so an unguarded read inside a template expression
+   * takes the whole page down instead of rendering the error branch written for
+   * exactly that case. Today the template's `@if (store.error())` happens to
+   * shield these, which means the crash is one carelessly-placed binding away
+   * rather than impossible. Guarding at the source removes the class of bug.
+   */
+  private readonly completedLoad = computed(() =>
+    this.completedResource.error() ? EMPTY : this.completedResource.value(),
   );
 
-  readonly counts = computed(() => this.countsResource.value());
+  private readonly openLoad = computed(() =>
+    this.openResource.error() ? EMPTY : this.openResource.value(),
+  );
+
+  readonly truncated = computed(
+    () => this.completedLoad().truncated || this.openLoad().truncated,
+  );
+
+  readonly counts = computed(() =>
+    this.countsResource.error() ? undefined : this.countsResource.value(),
+  );
 
   // ---- Cross-filtered views ------------------------------------------------
   //
@@ -172,16 +199,11 @@ export class InsightsStore {
    * empty half the page.
    */
   private readonly openMatters = computed(() =>
-    applyFilters(this.openResource.value().matters, this.domainFilter(), this.rangeFilter(), 'due'),
+    applyFilters(this.openLoad().matters, this.domainFilter(), this.rangeFilter(), 'due'),
   );
 
   private readonly completedMatters = computed(() =>
-    applyFilters(
-      this.completedResource.value().matters,
-      this.domainFilter(),
-      this.rangeFilter(),
-      'completed',
-    ),
+    applyFilters(this.completedLoad().matters, this.domainFilter(), this.rangeFilter(), 'completed'),
   );
 
   /**
@@ -196,7 +218,7 @@ export class InsightsStore {
    * narrowing the chart to a domain is the point of clicking a domain.
    */
   private readonly completedForTrend = computed(() =>
-    applyFilters(this.completedResource.value().matters, this.domainFilter(), null, 'completed'),
+    applyFilters(this.completedLoad().matters, this.domainFilter(), null, 'completed'),
   );
 
   /** Everything in the window, both states — what the pipeline is built from. */
@@ -214,7 +236,23 @@ export class InsightsStore {
   readonly openTotal = computed(() => this.counts()?.open ?? 0);
   readonly overdue = computed(() => this.counts()?.overdue ?? 0);
   readonly slipping = computed(() => this.counts()?.slipping ?? 0);
-  readonly completedThisWeek = computed(() => this.weeks().at(-1)?.completed ?? 0);
+
+  /**
+   * Counted over the RAW completion window, not the cross-filtered one.
+   *
+   * This tile used to read the trend chart's last bucket, which carries the
+   * domain filter. Its three neighbours come straight from the server and ignore
+   * the cross-filter by design, so clicking Finance changed one number in the
+   * row and left the other three alone — the tile silently answered a different
+   * question from the tiles beside it.
+   *
+   * There is no server counter for "completed in the last seven days"
+   * (`completedToday` is the closest), so this one is derived, and a truncated
+   * window could understate it. The banner above the panels says so.
+   */
+  readonly completedThisWeek = computed(
+    () => bucketByWeek(this.completedLoad().matters, this.now(), 1).at(-1)?.completed ?? 0,
+  );
 
   // ---- The panels ----------------------------------------------------------
 

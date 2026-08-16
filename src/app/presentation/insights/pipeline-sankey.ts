@@ -10,6 +10,27 @@ const HEIGHT = 300;
 const NODE_WIDTH = 11;
 const NODE_GAP = 7;
 
+/**
+ * Room OUTSIDE the columns for the labels that belong there.
+ *
+ * Without it the outer columns had nowhere to write except inward, on top of
+ * their own ribbons — so every label in the chart sat on a mid-tone fill at
+ * roughly 1.5:1. The viewBox is extended into negative space rather than the
+ * node coordinates being shifted, so the layout arithmetic below still reads in
+ * plain 0..WIDTH terms.
+ */
+const PAD = { left: 74, right: 96, top: 10, bottom: 10 };
+
+/**
+ * A node thinner than this gets no label.
+ *
+ * Ten pixels is about one line of 10px text. Below that the labels of adjacent
+ * nodes overlap each other faster than they become useful, and on a large
+ * account the middle column would degenerate into a stack of overprinted words.
+ * The rect and its tooltip still carry the value.
+ */
+const MIN_LABEL_HEIGHT = 10;
+
 const CHANNEL_LABELS: Record<CaptureChannel, string> = {
   voice: 'Spoken',
   document: 'Scanned',
@@ -17,11 +38,19 @@ const CHANNEL_LABELS: Record<CaptureChannel, string> = {
   manual: 'Typed',
 };
 
+/**
+ * "Late, untouched" rather than "Overdue".
+ *
+ * This node is late matters that have NEVER been rescheduled — anything moved
+ * even once leaves through `Pushed` instead. The Overdue tile at the top of the
+ * page counts both, so calling this one "Overdue" put two different numbers
+ * under one word on a single screen, and the smaller one looked like a bug.
+ */
 const OUTCOME_LABELS: Record<Outcome, string> = {
   done: 'Done',
   onTrack: 'On track',
   pushed: 'Pushed',
-  overdue: 'Overdue',
+  overdue: 'Late, untouched',
 };
 
 const OUTCOME_FILL: Record<Outcome, string> = {
@@ -71,7 +100,7 @@ interface Ribbon {
       <p class="py-8 text-center text-body-sm text-ink-muted">No matters in this window.</p>
     } @else {
       <svg
-        [attr.viewBox]="'0 0 ' + width + ' ' + height"
+        [attr.viewBox]="viewBox"
         class="w-full"
         role="img"
         aria-label="How matters arrive, where they are filed, and what becomes of them"
@@ -99,15 +128,17 @@ interface Ribbon {
             >
               <title>{{ node.label }} — {{ node.count }}</title>
             </rect>
-            <text
-              [attr.x]="labelX(node)"
-              [attr.y]="node.y + node.height / 2"
-              [attr.text-anchor]="labelAnchor(node)"
-              dominant-baseline="middle"
-              class="fill-ink-muted text-[10px]"
-            >
-              {{ node.label }}
-            </text>
+            @if (node.height >= minLabelHeight) {
+              <text
+                [attr.x]="labelX(node)"
+                [attr.y]="node.y + node.height / 2"
+                [attr.text-anchor]="labelAnchor(node)"
+                dominant-baseline="middle"
+                class="chart-label fill-ink text-[10px]"
+              >
+                {{ node.label }}
+              </text>
+            }
           </g>
         }
       </svg>
@@ -122,6 +153,15 @@ export class PipelineSankey {
   protected readonly width = WIDTH;
   protected readonly height = HEIGHT;
   protected readonly nodeWidth = NODE_WIDTH;
+  protected readonly minLabelHeight = MIN_LABEL_HEIGHT;
+
+  /** Extended into negative space so the outer labels have somewhere to live. */
+  protected readonly viewBox = [
+    -PAD.left,
+    -PAD.top,
+    WIDTH + PAD.left + PAD.right,
+    HEIGHT + PAD.top + PAD.bottom,
+  ].join(' ');
 
   private readonly columnX = [0, (WIDTH - NODE_WIDTH) / 2, WIDTH - NODE_WIDTH];
 
@@ -269,15 +309,22 @@ export class PipelineSankey {
     return node.domain === active ? 1 : 0.25;
   }
 
-  /** Outer columns label outward; the middle column labels to its right. */
+  /**
+   * Outer columns label OUTWARD, into the padding; the middle has no outside, so
+   * it labels right and relies on the halo to stay readable over the ribbons.
+   *
+   * The previous version's comment said this, and its arithmetic did the
+   * opposite: the left column was pushed to `NODE_WIDTH + 5`, which is inside
+   * the canvas, and the right column to `node.x - 5` with an `end` anchor, which
+   * runs back across its own ribbons. Every label in the chart was drawn on top
+   * of the flows.
+   */
   protected labelX(node: Node): number {
-    if (node.x === 0) return NODE_WIDTH + 5;
-    if (node.x === this.columnX[2]) return node.x - 5;
-    return node.x + NODE_WIDTH + 5;
+    return node.x === 0 ? -6 : node.x + NODE_WIDTH + 6;
   }
 
   protected labelAnchor(node: Node): string {
-    return node.x === this.columnX[2] ? 'end' : 'start';
+    return node.x === 0 ? 'end' : 'start';
   }
 }
 

@@ -6,7 +6,15 @@ import { DOMAIN_META } from '@presentation/shared/domain-meta';
 
 const WIDTH = 460;
 const HEIGHT = 260;
-const PAD = { top: 12, right: 14, bottom: 26, left: 34 };
+
+/**
+ * `top` is 22, not 12, to leave the axis title a line of its own.
+ *
+ * At 12 the "pushes" caption was drawn at the same height as the topmost tick
+ * label and starting to its left, so the two overprinted and the caption ran on
+ * across the y axis into the plot area.
+ */
+const PAD = { top: 22, right: 14, bottom: 26, left: 34 };
 
 /** Bubble radius by priority. Urgent is not much bigger — size is the weakest
  *  visual channel and overdoing it turns the chart into a cartoon. */
@@ -66,12 +74,17 @@ interface Bubble {
           stroke="var(--color-hairline)"
         />
 
+        <!-- 11px, not 9px. The viewBox is scaled DOWN to the column width, so
+             every size here renders smaller than it reads in the source; 9px
+             arrived at roughly 8.4px, and in ink-subtle that is about 2:1
+             against the card. Axis ticks are the labels a reader needs most and
+             they were the smallest, faintest thing on the page. -->
         @for (tick of xTicks(); track tick.value) {
           <text
             [attr.x]="tick.x"
-            [attr.y]="height - pad.bottom + 14"
+            [attr.y]="height - pad.bottom + 15"
             text-anchor="middle"
-            class="fill-ink-subtle text-[9px]"
+            class="fill-ink-muted text-[11px]"
           >
             {{ tick.value }}
           </text>
@@ -82,7 +95,7 @@ interface Bubble {
             [attr.y]="tick.y"
             text-anchor="end"
             dominant-baseline="middle"
-            class="fill-ink-subtle text-[9px]"
+            class="fill-ink-muted text-[11px]"
           >
             {{ tick.value }}
           </text>
@@ -92,17 +105,13 @@ interface Bubble {
           [attr.x]="(width + pad.left) / 2"
           [attr.y]="height - 2"
           text-anchor="middle"
-          class="fill-ink-muted text-[9px]"
+          class="fill-ink-muted text-[11px]"
         >
           days overdue
         </text>
-        <text
-          [attr.x]="10"
-          [attr.y]="pad.top + 4"
-          class="fill-ink-muted text-[9px]"
-        >
-          pushes
-        </text>
+        <!-- On its own line above the plot, where it cannot collide with the
+             topmost y tick. -->
+        <text [attr.x]="2" [attr.y]="10" class="fill-ink-muted text-[11px]">pushes</text>
 
         @for (bubble of bubbles(); track bubble.key) {
           <circle

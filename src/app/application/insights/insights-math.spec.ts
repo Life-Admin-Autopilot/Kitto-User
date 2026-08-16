@@ -124,6 +124,29 @@ describe('buildHeatmap', () => {
     const labels = grid.monthLabels.map((entry) => entry.label);
     expect(new Set(labels).size).toBe(labels.length);
   });
+
+  it('drops a month label that would overprint the one beside it', () => {
+    // Weeks starting Monday and ending Sunday 16 Aug put 27 July in column 0
+    // and 3 August in column 1 — two labels fourteen pixels apart.
+    const grid = buildHeatmap([], now, 3, 1, 'due', monthFmt, weekdayFmt);
+    expect(grid.columns[0][0].date.getDate()).toBe(27);
+
+    // The later one survives: it describes almost the whole grid, while July
+    // owns a single part-column at the edge.
+    expect(grid.monthLabels.map((entry) => entry.column)).toEqual([1]);
+    expect(grid.monthLabels[0].label).toBe(monthFmt.format(localDay(2026, 8, 3)));
+  });
+
+  it('keeps every surviving label far enough apart to be read', () => {
+    const grid = buildHeatmap([], now, 53, 1, 'due', monthFmt, weekdayFmt);
+    const columns = grid.monthLabels.map((entry) => entry.column);
+    for (let i = 1; i < columns.length; i++) {
+      expect(columns[i] - columns[i - 1]).toBeGreaterThanOrEqual(3);
+    }
+    // Still labels roughly a year's worth of months, rather than silently
+    // dropping most of them.
+    expect(columns.length).toBeGreaterThanOrEqual(11);
+  });
 });
 
 describe('buildGravity', () => {

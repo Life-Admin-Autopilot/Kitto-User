@@ -16,7 +16,11 @@ import { YearHeatmap } from './year-heatmap';
 const CHANNEL_META: Record<CaptureChannel, { label: string; bar: string; note: string }> = {
   voice: { label: 'Spoken', bar: 'bg-accent', note: 'captured by voice' },
   document: { label: 'Scanned', bar: 'bg-domain-finance', note: 'read from a document' },
-  connected: { label: 'Synced', bar: 'bg-domain-car', note: 'from a connected calendar' },
+  // "a connected service", not "a connected calendar". This channel is every
+  // integration the backend imports from — Google Calendar, Google Tasks, Apple
+  // Reminders, .ics feeds and forwarded email — and naming only the calendar
+  // made the other four look like they were not being counted.
+  connected: { label: 'Synced', bar: 'bg-domain-car', note: 'from a connected service' },
   manual: { label: 'Typed', bar: 'bg-ink-subtle', note: 'entered by hand' },
 };
 
@@ -67,8 +71,9 @@ const CHANNEL_META: Record<CaptureChannel, { label: string; bar: string; note: s
       } @else {
         @if (store.truncated()) {
           <p class="mb-4 rounded-lg bg-warning-soft px-3 py-2 text-caption text-warning">
-            This account has more matters than these panels loaded. The counters come from the
-            server and stay exact; the charts describe what was fetched.
+            This account has more matters than these panels loaded, so the charts describe the
+            first 1,200 of each window and the oldest weeks may be understated. Open, Overdue and
+            Slipping come from the server and stay exact.
           </p>
         }
 
@@ -163,8 +168,14 @@ const CHANNEL_META: Record<CaptureChannel, { label: string; bar: string; note: s
 
             <section class="rounded-2xl bg-surface p-5 shadow-card">
               <h2 class="mb-1 text-heading-sm text-ink">Where it comes from</h2>
+              <!-- Same population as the flow panel, and named the same way. A
+                   bare "reached the system" implied all-time, but this counts
+                   the open backlog plus a year of completions — an account with
+                   older history has more than this, and the shares would be a
+                   confident wrong answer without the qualifier. -->
               <p class="mb-4 text-caption text-ink-muted">
-                How {{ store.capturedTotal() }} matters reached the system.
+                How {{ store.capturedTotal() }} matters reached you — your open backlog, plus the
+                last year of completions.
               </p>
               @if (store.capturedTotal() === 0) {
                 <p class="text-body-sm text-ink-muted">No matters yet.</p>
@@ -191,8 +202,13 @@ const CHANNEL_META: Record<CaptureChannel, { label: string; bar: string; note: s
                  why the rows are buttons. -->
             <section class="rounded-2xl bg-surface p-5 shadow-card">
               <h2 class="mb-1 text-heading-sm text-ink">Where your attention sits</h2>
+              <!-- "Open and snoozed", precisely. The server's byDomain groups
+                   over live matters — open OR snoozed — while the Open tile at
+                   the top counts status=open alone. Calling both "open" put two
+                   populations under one word, and the bars visibly summed to
+                   more than the tile. -->
               <p class="mb-4 text-caption text-ink-muted">
-                Open matters per domain. Click one to filter everything.
+                Open and snoozed matters per domain. Click one to filter everything.
               </p>
               <ul class="flex flex-col gap-2">
                 @for (entry of store.domainBalance(); track entry.key) {

@@ -14,6 +14,7 @@ import {
 import {
   MAX_PAGE_SIZE,
   type MatterCounts,
+  type MatterPage,
   type MatterQuery,
   type MatterSort,
 } from '@domain/matters/matter-query';
@@ -30,11 +31,20 @@ export interface MatterGroup {
   readonly matters: readonly Matter[];
 }
 
-export interface LoadedMatters {
+const EMPTY_PAGE: MatterPage = { matters: [], total: 0, nextCursor: null };
+
+/** Pages fetched beyond the first, tagged with the query they belong to. */
+interface ExtraPages {
+  readonly key: string;
   readonly matters: readonly Matter[];
-  /** Total matching the filter server-side, not the number loaded. */
-  readonly total: number;
-  readonly hasMore: boolean;
+  /** Null once the server stops offering one — i.e. the end of the list. */
+  readonly cursor: string | null;
+}
+
+/** Rows the server has confirmed since the current query was fetched. */
+interface SettledRows {
+  readonly key: string;
+  readonly rows: ReadonlyMap<string, Matter>;
 }
 
 /**
@@ -62,7 +72,6 @@ export class MattersStore {
   private readonly filtersSignal = signal<MatterQuery>({ status: ['open', 'snoozed'] });
   private readonly sortSignal = signal<MatterSort>('due-asc');
   private readonly groupSignal = signal<GroupMode>('domain');
-  private readonly pagesSignal = signal(1);
 
   readonly filters = this.filtersSignal.asReadonly();
   readonly sort = this.sortSignal.asReadonly();
@@ -106,34 +115,44 @@ export class MattersStore {
     });
   });
 
+  /**
+   * The FIRST page only. Later pages are accumulated separately, on purpose.
+   *
+   * Paging used to be a `pages` counter inside these params, which made "load
+   * more" a brand new request: `resource.value()` falls back to its default the
+   * moment the params change, so the whole table blanked into skeletons, the
+   * header count dropped to 0, the keyboard cursor reset, and page 1 was
+   * re-downloaded before the new page could be appended. Everything the user was
+   * looking at disappeared in order to show them MORE of it.
+   */
   private readonly listResource = resource({
-    params: () => ({
-      query: this.effectiveQuery(),
-      sort: this.sortSignal(),
-      pages: this.pagesSignal(),
-    }),
-    loader: async ({ params, abortSignal }): Promise<LoadedMatters> => {
-      const collected: Matter[] = [];
-      let cursor: string | undefined;
-      let total = 0;
-
-      for (let page = 0; page < params.pages; page++) {
-        const result = await this.repository.list(
-          { query: params.query, sort: params.sort, limit: PAGE, cursor },
-          abortSignal,
-        );
-        collected.push(...result.matters);
-        total = result.total;
-        if (!result.nextCursor) {
-          return { matters: collected, total, hasMore: false };
-        }
-        cursor = result.nextCursor;
-      }
-
-      return { matters: collected, total, hasMore: true };
-    },
-    defaultValue: { matters: [], total: 0, hasMore: false },
+    params: () => ({ query: this.effectiveQuery(), sort: this.sortSignal() }),
+    loader: ({ params, abortSignal }) =>
+      this.repository.list({ query: params.query, sort: params.sort, limit: PAGE }, abortSignal),
+    defaultValue: EMPTY_PAGE,
   });
+
+  /**
+   * Identity of the current query, so accumulated pages can be discarded the
+   * instant they stop belonging to what is on screen.
+   *
+   * Compared rather than cleared by an effect: a filter change and the pages
+   * fetched under the old filter are then impossible to interleave, including
+   * when a "load more" is still in flight as the filter moves.
+   */
+  private readonly queryKey = computed(() =>
+    JSON.stringify([this.effectiveQuery(), this.sortSignal()]),
+  );
+
+  private readonly extraSignal = signal<ExtraPages | null>(null);
+
+  private readonly extra = computed(() => {
+    const extra = this.extraSignal();
+    return extra && extra.key === this.queryKey() ? extra : null;
+  });
+
+  private readonly loadingMoreSignal = signal(false);
+  readonly loadingMore = this.loadingMoreSignal.asReadonly();
 
   /** Bumped to force a counts refetch — see `reloadCounts`. */
   private readonly countsNonceSignal = signal(0);
@@ -150,6 +169,23 @@ export class MattersStore {
 
   /** Optimistic status writes, keyed by matter id. Cleared on reconcile. */
   private readonly pendingSignal = signal<ReadonlyMap<string, MatterStatus>>(new Map());
+
+  /**
+   * Rows the server has confirmed since this query was fetched.
+   *
+   * A completed matter STAYS on screen wearing its new state instead of being
+   * refetched out of existence. Reloading the list after every tick made the row
+   * vanish the moment the round trip landed, which is what left the interface
+   * with no way to undo: the thing you wanted to un-tick was no longer there to
+   * un-tick. Keeping it visible until the next real refresh is what makes E a
+   * toggle in practice and not just in the API.
+   */
+  private readonly settledSignal = signal<SettledRows | null>(null);
+
+  private readonly settled = computed(() => {
+    const settled = this.settledSignal();
+    return settled && settled.key === this.queryKey() ? settled.rows : null;
+  });
 
   private readonly actionErrorSignal = signal<string | null>(null);
   readonly actionError = this.actionErrorSignal.asReadonly();
@@ -171,12 +207,20 @@ export class MattersStore {
    */
   readonly matters = computed(() => {
     if (this.listResource.error()) return [];
+    const extra = this.extra();
+    const first = this.listResource.value().matters;
+    const loaded = extra ? [...first, ...extra.matters] : first;
+
+    // Two overlays, innermost last: what the server confirmed, then what the
+    // user has just asked for and is still in flight.
+    const settled = this.settled();
     const pending = this.pendingSignal();
-    const loaded = this.listResource.value().matters;
-    if (pending.size === 0) return loaded;
+    if (!settled && pending.size === 0) return loaded;
+
     return loaded.map((matter) => {
+      const row = settled?.get(matter.id) ?? matter;
       const status = pending.get(matter.id);
-      return status ? { ...matter, status } : matter;
+      return status ? { ...row, status } : row;
     });
   });
 
@@ -184,9 +228,11 @@ export class MattersStore {
     this.listResource.error() ? 0 : this.listResource.value().total,
   );
 
-  readonly hasMore = computed(() =>
-    this.listResource.error() ? false : this.listResource.value().hasMore,
-  );
+  readonly hasMore = computed(() => {
+    if (this.listResource.error()) return false;
+    const extra = this.extra();
+    return (extra ? extra.cursor : this.listResource.value().nextCursor) !== null;
+  });
 
   /** Undefined rather than a throw when the counts request failed — the rail
    *  renders without numbers instead of taking the page down with it. */
@@ -269,8 +315,9 @@ export class MattersStore {
 
   // ---- Intent ----
 
+  /** No page reset needed: changing a filter changes `queryKey`, which strands
+   *  the accumulated pages behind it and they stop being read. */
   patchFilters(patch: Partial<MatterQuery>): void {
-    this.pagesSignal.set(1);
     this.filtersSignal.update((current) => prune({ ...current, ...patch }));
   }
 
@@ -300,7 +347,6 @@ export class MattersStore {
   }
 
   setSort(sort: MatterSort): void {
-    this.pagesSignal.set(1);
     this.sortSignal.set(sort);
   }
 
@@ -309,15 +355,51 @@ export class MattersStore {
   }
 
   clearFilters(): void {
-    this.pagesSignal.set(1);
     this.filtersSignal.set({ status: ['open', 'snoozed'] });
   }
 
-  loadMore(): void {
-    this.pagesSignal.update((pages) => pages + 1);
+  /**
+   * Fetch the next page and APPEND it. The rows already on screen never move.
+   *
+   * The query is captured before the request and re-checked after it, so a page
+   * that arrives once the user has changed filters is dropped rather than
+   * appended to a list it does not describe.
+   */
+  async loadMore(): Promise<void> {
+    if (this.loadingMoreSignal() || this.listResource.error()) return;
+
+    const key = this.queryKey();
+    const extra = this.extra();
+    const cursor = extra ? extra.cursor : this.listResource.value().nextCursor;
+    if (!cursor) return;
+
+    this.loadingMoreSignal.set(true);
+    try {
+      const page = await this.repository.list({
+        query: this.effectiveQuery(),
+        sort: this.sortSignal(),
+        limit: PAGE,
+        cursor,
+      });
+
+      if (this.queryKey() !== key) return;
+
+      this.extraSignal.set({
+        key,
+        matters: [...(extra?.matters ?? []), ...page.matters],
+        cursor: page.nextCursor,
+      });
+    } catch {
+      this.actionErrorSignal.set('Could not load more matters.');
+    } finally {
+      this.loadingMoreSignal.set(false);
+    }
   }
 
+  /** A full refresh: back to one page of server truth, overlays discarded. */
   reload(): void {
+    this.extraSignal.set(null);
+    this.settledSignal.set(null);
     this.listResource.reload();
   }
 
@@ -373,9 +455,14 @@ export class MattersStore {
     });
   }
 
-  /** The status as the user currently sees it, optimistic write included. */
+  /** The status as the user currently sees it: in-flight write, then the last
+   *  server confirmation, then whatever the list arrived with. */
   private statusOf(matter: Matter): MatterStatus {
-    return this.pendingSignal().get(matter.id) ?? matter.status;
+    return (
+      this.pendingSignal().get(matter.id) ??
+      this.settled()?.get(matter.id)?.status ??
+      matter.status
+    );
   }
 
   /**
@@ -392,8 +479,13 @@ export class MattersStore {
     this.actionErrorSignal.set(null);
 
     try {
-      await this.repository.update(matter.id, patch);
-      this.listResource.reload();
+      const updated = await this.repository.update(matter.id, patch);
+      const key = this.queryKey();
+      this.settledSignal.update((current) => {
+        const rows = new Map(current?.key === key ? current.rows : []);
+        rows.set(matter.id, updated);
+        return { key, rows };
+      });
       this.reloadCounts();
     } catch {
       this.actionErrorSignal.set(`Could not update "${matter.title}". The change was not saved.`);

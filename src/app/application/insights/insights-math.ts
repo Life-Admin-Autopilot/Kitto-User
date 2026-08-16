@@ -162,7 +162,33 @@ export function buildHeatmap(
     weekdayFormatter.format(addDays(gridStart, index)),
   );
 
-  return { columns, monthLabels, weekdays, busiestDay };
+  return { columns, monthLabels: spaceLabels(monthLabels), weekdays, busiestDay };
+}
+
+/**
+ * The narrowest column gap a month label can survive.
+ *
+ * A column is 14px and a short month name is roughly 20px, so two labels closer
+ * than three columns overprint into an unreadable smudge.
+ */
+const MIN_LABEL_COLUMNS = 3;
+
+/**
+ * Drop a month label that would collide with the next one, keeping the LATER.
+ *
+ * This only ever fires at the left edge, and only because the grid begins on a
+ * week boundary: a grid starting on 28 July puts "Jul" on column 0 and "Aug" on
+ * column 1, fourteen pixels apart. Keeping the later label is the right way
+ * round — the leading month owns one part-column, the one after it owns four or
+ * five, so the label that survives is the one describing most of what is drawn.
+ */
+function spaceLabels(
+  labels: readonly { column: number; label: string }[],
+): { column: number; label: string }[] {
+  return labels.filter(
+    (entry, index) =>
+      index === labels.length - 1 || labels[index + 1].column - entry.column >= MIN_LABEL_COLUMNS,
+  );
 }
 
 function dominantDomain(matters: readonly Matter[]): MatterDomain | null {

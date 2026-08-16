@@ -51,8 +51,11 @@ interface Command {
   },
   template: `
     @if (open()) {
+      <!-- bg-scrim, not bg-ink/20: ink is near-WHITE in dark mode, so an ink
+           wash lightened the page behind the dialog instead of pushing it back.
+           A scrim darkens in both themes. -->
       <div
-        class="fixed inset-0 z-50 flex items-start justify-center bg-ink/20 pt-[15vh] backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-start justify-center bg-scrim pt-[15vh] backdrop-blur-sm"
         (click)="close()"
       >
         <div
@@ -75,15 +78,32 @@ interface Command {
           />
 
           <div class="max-h-80 overflow-y-auto border-t border-hairline">
+            <!--
+              The selected row is the palette's ONLY answer to "what will Enter
+              do", and focus never leaves the input, so there is no browser focus
+              ring to fall back on. It was marked with bg-surface-sunken on a
+              bg-surface panel: a 4/255 step in dark, 1.04:1, invisible. Arrow
+              keys moved a highlight nobody could see.
+
+              Three cues now, so it survives any theme: an accent fill, an accent
+              bar down the leading edge, and the label in accent ink.
+            -->
             @for (command of results(); track command.id; let i = $index) {
               <button
                 type="button"
                 (click)="run(command)"
                 (mouseenter)="active.set(i)"
-                class="flex w-full items-center gap-3 px-4 py-2.5 text-start"
-                [class.bg-surface-sunken]="i === activeIndex()"
+                class="flex w-full items-center gap-3 border-s-2 px-4 py-2.5 text-start transition-colors"
+                [class.bg-accent-soft]="i === activeIndex()"
+                [class.border-accent]="i === activeIndex()"
+                [class.border-transparent]="i !== activeIndex()"
               >
-                <span class="flex-1 truncate text-body-sm text-ink">{{ command.label }}</span>
+                <span
+                  class="flex-1 truncate text-body-sm"
+                  [class.text-accent]="i === activeIndex()"
+                  [class.text-ink]="i !== activeIndex()"
+                  >{{ command.label }}</span
+                >
                 <span class="shrink-0 text-micro text-ink-subtle">{{ command.hint }}</span>
               </button>
             } @empty {

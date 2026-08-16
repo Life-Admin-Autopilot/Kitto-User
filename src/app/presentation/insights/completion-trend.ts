@@ -23,11 +23,18 @@ import { DashboardFilterStore } from '@application/shared/dashboard-filter.store
     '(pointerleave)': 'endBrush()',
   },
   template: `
-    <div class="flex h-40 items-end gap-1.5 select-none">
+    <!--
+      items-stretch, not items-end. Aligning the columns to the bottom left each
+      one sized by its content, so the bar's percentage height had an indefinite
+      height to resolve against and collapsed to zero — every bar rendered at 0px
+      and the chart was a row of numbers over a blank strip. The track below is
+      what gives the percentage something real to measure.
+    -->
+    <div class="flex h-40 items-stretch gap-1.5 select-none">
       @for (week of weeks(); track week.start.getTime(); let i = $index) {
         <button
           type="button"
-          class="flex flex-1 cursor-pointer flex-col items-center gap-1.5"
+          class="flex h-full flex-1 cursor-pointer flex-col items-center gap-1.5"
           (pointerdown)="startBrush(i)"
           (pointerenter)="extendBrush(i)"
           [attr.aria-label]="ariaFor(week)"
@@ -35,12 +42,16 @@ import { DashboardFilterStore } from '@application/shared/dashboard-filter.store
           <span class="tabular text-micro" [class.text-ink-muted]="!inBrush(i)" [class.text-accent]="inBrush(i)">
             {{ week.completed }}
           </span>
-          <div
-            class="w-full rounded-t-md transition-[height,background-color]"
-            [class.bg-accent]="inBrush(i)"
-            [class.bg-ink-subtle]="!inBrush(i)"
-            [style.height.%]="barHeight(week.completed)"
-          ></div>
+          <!-- The track: a flex item, so its height IS resolved, and positioned,
+               so the bar inside measures its percentage against exactly this. -->
+          <span class="relative w-full flex-1">
+            <span
+              class="absolute inset-x-0 bottom-0 rounded-t-md transition-[height,background-color]"
+              [class.bg-accent]="inBrush(i)"
+              [class.bg-ink-subtle]="!inBrush(i)"
+              [style.height.%]="barHeight(week.completed)"
+            ></span>
+          </span>
           <span class="text-micro text-ink-subtle">{{ label(week.start) }}</span>
         </button>
       }

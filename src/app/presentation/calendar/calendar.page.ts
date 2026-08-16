@@ -270,16 +270,22 @@ export class CalendarPage {
    * A matter whose time was assumed is drawn differently.
    *
    * `dateOnly` and `floating` mean nobody chose the hour this chip implies, so
-   * it gets a dashed outline instead of a solid fill — the same distinction the
-   * phone makes with its time-provenance line. Drawing an assumed 09:00 exactly
-   * like a confirmed 09:00 is the trust failure this product is built to avoid,
-   * and a calendar is the surface most likely to commit it.
+   * it gets a DASHED BORDER — the same distinction the phone makes with its
+   * time-provenance line. Drawing an assumed 09:00 exactly like a confirmed
+   * 09:00 is the trust failure this product is built to avoid, and a calendar is
+   * the surface most likely to commit it.
+   *
+   * The pastel fill stays. Dropping it left a dark domain ink on the near-black
+   * cell at 2.0–3.0:1 — so in dark mode the assumed chip was HARDER to read than
+   * the confirmed one, exactly inverting what this method exists to say. The
+   * domain pastel and its ink are a theme-invariant pair (4.4–7.3:1 in both
+   * themes); the dashed edge carries the distinction on its own.
    */
   protected chipClass(matter: Matter): string {
     const meta = DOMAIN_META[matter.domain];
     return hasAssumedTime(matter)
-      ? `border border-dashed border-current bg-transparent ${meta.ink}`
-      : `${meta.bg} ${meta.ink}`;
+      ? `border border-dashed border-current ${meta.bg} ${meta.ink}`
+      : `border border-transparent ${meta.bg} ${meta.ink}`;
   }
 
   protected tooltip(matter: Matter): string {

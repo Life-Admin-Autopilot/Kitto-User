@@ -52,10 +52,17 @@ const NAV: readonly NavEntry[] = [
       </div>
 
       @for (entry of nav; track entry.route) {
+        <!--
+          Active is accent-soft, not surface-sunken. On the dark sidebar,
+          sunken-on-surface is a 4/255 step — 1.04:1 — so the pill marking WHERE
+          YOU ARE was invisible, and the 60% hover was fainter still. Accent-soft
+          plus coral text is the same pairing the cross-filter chip uses, and it
+          survives both themes.
+        -->
         <a
           [routerLink]="entry.route"
-          routerLinkActive="bg-surface-sunken !text-ink"
-          class="flex items-center gap-3 rounded-pill px-3 py-2.5 text-body-sm text-ink-muted transition-colors hover:bg-surface-sunken/60 hover:text-ink"
+          routerLinkActive="bg-accent-soft !text-accent font-semibold"
+          class="flex items-center gap-3 rounded-pill px-3 py-2.5 text-body-sm text-ink-muted transition-colors hover:bg-surface-field hover:text-ink"
         >
           <svg
             width="19"
@@ -81,7 +88,7 @@ const NAV: readonly NavEntry[] = [
           type="button"
           (click)="theme.cycle()"
           [attr.aria-label]="'Theme: ' + theme.preference() + '. Change.'"
-          class="flex items-center gap-3 rounded-pill px-3 py-2 text-body-sm text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
+          class="flex items-center gap-3 rounded-pill px-3 py-2 text-body-sm text-ink-muted transition-colors hover:bg-surface-field hover:text-ink"
         >
           <svg
             width="17"
@@ -102,7 +109,7 @@ const NAV: readonly NavEntry[] = [
         <button
           type="button"
           (click)="signOut()"
-          class="rounded-pill px-3 py-2 text-start text-body-sm text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
+          class="rounded-pill px-3 py-2 text-start text-body-sm text-ink-muted transition-colors hover:bg-surface-field hover:text-ink"
         >
           Sign out
         </button>

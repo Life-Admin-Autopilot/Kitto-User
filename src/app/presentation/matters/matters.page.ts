@@ -252,13 +252,16 @@ const CHANNEL_LABELS = {
           }
 
           @if (store.hasMore()) {
+            <!-- loadingMore, not isLoading: the next page is appended without
+                 disturbing the rows already here, so the only thing that should
+                 look busy is this button. -->
             <button
               type="button"
               (click)="store.loadMore()"
-              [disabled]="store.isLoading()"
+              [disabled]="store.loadingMore()"
               class="mx-auto block rounded-pill bg-surface px-5 py-2.5 text-body-sm text-ink shadow-card transition-colors hover:bg-surface-sunken disabled:opacity-50"
             >
-              {{ store.isLoading() ? 'Loading…' : 'Load more' }}
+              {{ store.loadingMore() ? 'Loading…' : 'Load more' }}
             </button>
           }
 
