@@ -248,3 +248,42 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/*
+ * ---- The trust lens ----
+ *
+ * One class on <html>, set by TrustLensStore. Elements that render a matter
+ * carry `data-trust="certain" | "guessed"`; this decides what that means, so
+ * the rule lives once instead of as a conditional class in every component that
+ * draws a row.
+ *
+ * Recede, do not hide. A confident matter still has to be readable while the
+ * lens is on — the question the lens answers is "what did you guess?", not
+ * "show me only the guesses", and a surface that emptied itself would lose the
+ * context that makes the guesses meaningful.
+ *
+ * Guessed values get a warning underline rather than a fill: they are already
+ * carrying domain colour and priority colour, and a third background would be
+ * one signal too many on the same row.
+ */
+.trust-lens [data-trust='certain'] {
+  opacity: 0.28;
+  filter: saturate(0.4);
+}
+
+.trust-lens [data-trust='guessed'] {
+  text-decoration: underline wavy var(--color-warning);
+  text-underline-offset: 3px;
+}
+
+/* Motion is a courtesy here, not an effect — the lens is toggled repeatedly
+   while reviewing, and an instant hard switch is jarring at that cadence. */
+[data-trust] {
+  transition: opacity 160ms var(--ease-out-expo), filter 160ms var(--ease-out-expo);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-trust] {
+    transition: none;
+  }
+}

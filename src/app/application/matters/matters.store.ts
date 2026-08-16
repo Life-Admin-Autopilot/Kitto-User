@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, resource, signal } from '@angular/core';
 
 import { SessionStore } from '@application/auth/session.store';
+import { DashboardFilterStore } from '@application/shared/dashboard-filter.store';
 import {
   MATTER_DOMAINS,
   type Matter,
@@ -50,6 +51,7 @@ export interface LoadedMatters {
 export class MattersStore {
   private readonly repository = inject(MatterRepository);
   private readonly session = inject(SessionStore);
+  private readonly crossFilter = inject(DashboardFilterStore);
 
   /**
    * Hide completed matters by default — a done list is a log, not a workspace.
@@ -64,9 +66,33 @@ export class MattersStore {
   readonly sort = this.sortSignal.asReadonly();
   readonly group = this.groupSignal.asReadonly();
 
+  /**
+   * The rail's filters, plus whatever the dashboard is cross-filtered to.
+   *
+   * Merged at query time rather than written into `filtersSignal`, so the two
+   * stay distinguishable: clicking Finance on Insights and then clearing the
+   * rail must not silently drop the cross-filter, and clearing the cross-filter
+   * chip must not wipe the filters someone set here by hand.
+   *
+   * The cross-filter wins on conflict. It was the more recent, more deliberate
+   * gesture — someone who clicks a domain on a chart and lands on a table
+   * showing a different domain will assume the table is broken.
+   */
+  private readonly effectiveQuery = computed<MatterQuery>(() => {
+    const base = this.filtersSignal();
+    const domain = this.crossFilter.domain();
+    const range = this.crossFilter.range();
+
+    return prune({
+      ...base,
+      ...(domain ? { domain: [domain] } : {}),
+      ...(range ? { dueAfter: range.after, dueBefore: range.before } : {}),
+    });
+  });
+
   private readonly listResource = resource({
     params: () => ({
-      query: this.filtersSignal(),
+      query: this.effectiveQuery(),
       sort: this.sortSignal(),
       pages: this.pagesSignal(),
     }),
@@ -140,6 +166,41 @@ export class MattersStore {
     }
   });
 
+  // ---- Keyboard triage ----
+  //
+  // A cursor over the rendered order, not over `matters()`. Grouping re-orders
+  // rows, so a cursor into the unsorted array would jump around the screen as
+  // J moved it "down".
+
+  private readonly cursorSignal = signal(0);
+
+  readonly flatMatters = computed(() => this.groups().flatMap((group) => group.matters));
+
+  readonly cursor = computed(() => {
+    const length = this.flatMatters().length;
+    if (length === 0) return -1;
+    // Clamped on read rather than on write: the list re-orders and shrinks
+    // under the cursor constantly — a completed matter leaves the filter — and
+    // clamping at the edges is what stops the highlight vanishing when it does.
+    return Math.min(this.cursorSignal(), length - 1);
+  });
+
+  readonly cursorMatter = computed<Matter | null>(() => {
+    const index = this.cursor();
+    return index < 0 ? null : (this.flatMatters()[index] ?? null);
+  });
+
+  moveCursor(delta: number): void {
+    const length = this.flatMatters().length;
+    if (length === 0) return;
+    this.cursorSignal.set(Math.max(0, Math.min(this.cursor() + delta, length - 1)));
+  }
+
+  setCursorTo(matterId: string): void {
+    const index = this.flatMatters().findIndex((matter) => matter.id === matterId);
+    if (index >= 0) this.cursorSignal.set(index);
+  }
+
   // ---- Intent ----
 
   patchFilters(patch: Partial<MatterQuery>): void {
@@ -196,6 +257,26 @@ export class MattersStore {
    */
   async complete(matter: Matter): Promise<void> {
     await this.repository.update(matter.id, { status: 'done' });
+    this.listResource.reload();
+    this.countsResource.reload();
+  }
+
+  /**
+   * Snooze to 09:00 tomorrow.
+   *
+   * `dueAt` is deliberately untouched. Rewriting it would be a lie about when a
+   * bill is actually due — snoozing changes when the system nudges you, not
+   * when the world expects you.
+   */
+  async snooze(matter: Matter): Promise<void> {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+
+    await this.repository.update(matter.id, {
+      status: 'snoozed',
+      snoozedUntil: tomorrow.toISOString(),
+    });
     this.listResource.reload();
     this.countsResource.reload();
   }

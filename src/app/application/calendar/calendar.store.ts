@@ -4,6 +4,7 @@ import { SessionStore } from '@application/auth/session.store';
 import type { Matter } from '@domain/matters/matter';
 import { MAX_PAGE_SIZE } from '@domain/matters/matter-query';
 import { MatterRepository } from '@domain/matters/matter.repository';
+import { estimatedMinutes } from '@application/insights/insights-math';
 import { addMonths, buildMonthGrid, dayKey, firstDayOfWeek, startOfDay } from './calendar-month';
 
 /**
@@ -112,6 +113,36 @@ export class CalendarStore {
 
   mattersOn(day: Date): readonly Matter[] {
     return this.byDay().get(dayKey(day)) ?? [];
+  }
+
+  /**
+   * Estimated workload per day, in minutes — the pressure map.
+   *
+   * A count of matters is a poor proxy for a day's weight: three quick errands
+   * and one four-hour appointment both render as "4" and feel nothing alike.
+   * `estimate` carries a bucketed range per matter, so summing the midpoints
+   * gives a cell something honest to be tinted by.
+   *
+   * Matters with no estimate contribute nothing rather than a default. A made-up
+   * default would quietly convert "unknown" into "quick", which is the wrong way
+   * for this to be wrong — a day that looks empty and is not is exactly the
+   * failure the calendar exists to prevent.
+   */
+  readonly loadByDay = computed(() => {
+    const load = new Map<string, number>();
+    for (const [key, matters] of this.byDay()) {
+      load.set(key, estimatedMinutes(matters));
+    }
+    return load;
+  });
+
+  /** The busiest day in view, so cells can be tinted relative to the month. */
+  readonly peakLoad = computed(() =>
+    [...this.loadByDay().values()].reduce((max, minutes) => Math.max(max, minutes), 0),
+  );
+
+  loadOn(day: Date): number {
+    return this.loadByDay().get(dayKey(day)) ?? 0;
   }
 
   goToPreviousMonth(): void {

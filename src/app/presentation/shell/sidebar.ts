@@ -4,6 +4,7 @@ import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { SessionStore } from '@application/auth/session.store';
 import { ThemeStore } from '@application/theme/theme.store';
 import { firstNameOf } from '@domain/auth/session';
+import { KittoLogo } from '@presentation/shared/kitto-logo';
 
 interface NavEntry {
   readonly route: string;
@@ -42,15 +43,11 @@ const NAV: readonly NavEntry[] = [
 @Component({
   selector: 'app-sidebar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, KittoLogo],
   template: `
     <nav class="sticky top-0 flex h-dvh w-60 shrink-0 flex-col gap-1 bg-surface px-4 py-6">
-      <div class="mb-7 flex items-center gap-2 px-3">
-        <span
-          class="grid size-8 place-items-center rounded-full bg-accent text-body-sm font-bold text-accent-ink"
-          aria-hidden="true"
-          >K</span
-        >
+      <div class="mb-7 flex items-center gap-2.5 px-3">
+        <app-kitto-logo [size]="34" [eager]="true" />
         <span class="text-heading-md text-ink">Kitto</span>
       </div>
 

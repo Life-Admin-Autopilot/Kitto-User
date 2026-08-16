@@ -5,20 +5,17 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { SessionStore } from '@application/auth/session.store';
 import { AuthRejectedError } from '@domain/auth/auth-errors';
 import { ApiError } from '@infrastructure/http/api-error';
+import { KittoLogo } from '@presentation/shared/kitto-logo';
 
 @Component({
   selector: 'app-sign-in',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, KittoLogo],
   template: `
     <div class="grid min-h-dvh place-items-center bg-canvas px-6">
       <div class="w-full max-w-sm">
         <div class="mb-8 flex flex-col items-center gap-3">
-          <span
-            class="grid size-12 place-items-center rounded-full bg-accent text-heading-md font-bold text-accent-ink"
-            aria-hidden="true"
-            >K</span
-          >
+          <app-kitto-logo [size]="88" [eager]="true" label="Kitto" />
           <h1 class="font-display text-display-md text-ink">Kitto</h1>
           <p class="text-body-sm text-ink-muted">Sign in to your dashboard.</p>
         </div>
@@ -112,7 +109,15 @@ export class SignInPage {
 function messageFor(failure: unknown): string {
   if (failure instanceof AuthRejectedError) return 'Email or password is incorrect.';
   if (failure instanceof ApiError) {
-    if (failure.isNetworkFailure) return 'Cannot reach the server. Check that it is running.';
+    // Status 0 is every failure where no response arrived: the server is down,
+    // the DNS lookup failed, or CORS rejected the request before the browser
+    // would show it to us. Those are genuinely indistinguishable from
+    // JavaScript — the fetch spec deliberately hides which one it was — so the
+    // message names both plausible causes rather than guessing one and sending
+    // someone to restart a server that was running the whole time.
+    if (failure.isNetworkFailure) {
+      return 'No response from the server. Check that it is running, and that this origin is allowed by its CORS configuration.';
+    }
     if (failure.status === 429) return 'Too many attempts. Wait a few minutes and try again.';
     return failure.message;
   }

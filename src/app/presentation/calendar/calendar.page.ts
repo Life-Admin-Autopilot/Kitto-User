@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { CalendarStore } from '@application/calendar/calendar.store';
 import { DAYS_IN_WEEK, isSameDay, isSameMonth } from '@application/calendar/calendar-month';
 import { SessionStore } from '@application/auth/session.store';
+import { TrustLensStore, trustOf } from '@application/shared/trust-lens.store';
 import { hasAssumedTime, type Matter } from '@domain/matters/matter';
 import { DOMAIN_META } from '@presentation/shared/domain-meta';
 
@@ -58,7 +59,43 @@ const VISIBLE_PER_DAY = 3;
         @if (store.isLoading()) {
           <span class="text-caption text-ink-muted">Loading…</span>
         }
+
+        <div class="ms-auto flex items-center gap-2">
+          <button
+            type="button"
+            (click)="pressure.set(!pressure())"
+            [attr.aria-pressed]="pressure()"
+            class="rounded-pill px-3 py-1.5 text-body-sm transition-colors"
+            [class.bg-warning]="pressure()"
+            [class.text-canvas]="pressure()"
+            [class.bg-surface]="!pressure()"
+            [class.text-ink-muted]="!pressure()"
+            [class.shadow-card]="!pressure()"
+          >
+            Pressure
+          </button>
+          <button
+            type="button"
+            (click)="lens.toggle()"
+            [attr.aria-pressed]="lens.active()"
+            class="rounded-pill px-3 py-1.5 text-body-sm transition-colors"
+            [class.bg-warning]="lens.active()"
+            [class.text-canvas]="lens.active()"
+            [class.bg-surface]="!lens.active()"
+            [class.text-ink-muted]="!lens.active()"
+            [class.shadow-card]="!lens.active()"
+          >
+            Trust lens
+          </button>
+        </div>
       </header>
+
+      @if (pressure()) {
+        <p class="mb-2 text-caption text-ink-muted">
+          Days are shaded by estimated workload, not by how many matters they hold. Matters with no
+          estimate add nothing — an unshaded day is not necessarily a free one.
+        </p>
+      }
 
       @if (store.error()) {
         <div class="rounded-2xl bg-danger-soft px-4 py-3 text-body-sm text-danger">
@@ -88,7 +125,9 @@ const VISIBLE_PER_DAY = 3;
             @for (day of week; track day.getTime()) {
               <div
                 class="flex min-h-0 flex-col gap-1 border-b border-e border-hairline p-1.5"
-                [class.bg-surface-sunken]="!inMonth(day)"
+                [class.bg-surface-sunken]="!inMonth(day) && !pressure()"
+                [style.background-color]="pressureFill(day)"
+                [title]="pressure() ? loadLabel(day) : ''"
               >
                 <span
                   class="tabular self-start rounded-full px-1.5 text-caption"
@@ -106,6 +145,7 @@ const VISIBLE_PER_DAY = 3;
                     <div
                       class="flex items-center gap-1.5 rounded-md px-1.5 py-0.5"
                       [class]="chipClass(matter)"
+                      [attr.data-trust]="trust(matter)"
                       [title]="tooltip(matter)"
                     >
                       <span class="text-[10px] leading-none" aria-hidden="true">{{
@@ -133,7 +173,38 @@ const VISIBLE_PER_DAY = 3;
 })
 export class CalendarPage {
   protected readonly store = inject(CalendarStore);
+  protected readonly lens = inject(TrustLensStore);
   private readonly session = inject(SessionStore);
+
+  /** The pressure map is opt-in: it answers a different question from the
+   *  default view, and shading every cell by default would fight the domain
+   *  colours the chips already carry. */
+  protected readonly pressure = signal(false);
+  protected readonly trust = trustOf;
+
+  /**
+   * Cell tint by estimated workload, relative to the busiest day in view.
+   *
+   * Relative rather than absolute because "a heavy day" means something
+   * different for different people — six hours of admin is a catastrophe for
+   * one person and a Tuesday for another. Capped at 55% so the day number and
+   * the chips stay legible on top of it.
+   */
+  protected pressureFill(day: Date): string | null {
+    if (!this.pressure()) return null;
+    const peak = this.store.peakLoad();
+    if (peak === 0) return null;
+    const share = this.store.loadOn(day) / peak;
+    if (share === 0) return null;
+    return `color-mix(in srgb, var(--color-warning) ${Math.round(share * 55)}%, transparent)`;
+  }
+
+  protected loadLabel(day: Date): string {
+    const minutes = Math.round(this.store.loadOn(day));
+    if (minutes === 0) return 'No estimated work';
+    if (minutes < 60) return `about ${minutes} min estimated`;
+    return `about ${(minutes / 60).toFixed(1)} h estimated`;
+  }
 
   /**
    * The Intl tag to format with.

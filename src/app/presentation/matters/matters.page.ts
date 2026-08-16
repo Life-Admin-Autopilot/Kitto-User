@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 
 import { SessionStore } from '@application/auth/session.store';
 import { MattersStore, type GroupMode } from '@application/matters/matters.store';
+import { DashboardFilterStore } from '@application/shared/dashboard-filter.store';
+import { trustOf } from '@application/shared/trust-lens.store';
 import { captureChannelOf, hasAssumedTime, type Matter } from '@domain/matters/matter';
 import { MATTER_SORTS, type MatterSort } from '@domain/matters/matter-query';
 import { DOMAIN_META, PRIORITY_META } from '@presentation/shared/domain-meta';
@@ -29,6 +31,9 @@ const CHANNEL_LABELS = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [MattersStore],
   imports: [FilterRail],
+  host: {
+    '(document:keydown)': 'onKeydown($event)',
+  },
   template: `
     <div class="flex gap-6 px-8 py-6">
       <app-filter-rail />
@@ -37,6 +42,17 @@ const CHANNEL_LABELS = {
         <header class="mb-5 flex flex-wrap items-center gap-3">
           <h1 class="font-display text-display-md text-ink">Matters</h1>
           <span class="tabular text-body-sm text-ink-muted">{{ summary() }}</span>
+
+          @if (crossFilter.isActive()) {
+            <div
+              class="flex items-center gap-2 rounded-pill bg-accent-soft px-3 py-1 text-caption text-accent"
+            >
+              <span>{{ crossFilterLabel() }}</span>
+              <button type="button" (click)="crossFilter.clear()" aria-label="Clear filter">
+                ✕
+              </button>
+            </div>
+          }
 
           <div class="ms-auto flex items-center gap-2">
             <input
@@ -110,7 +126,10 @@ const CHANNEL_LABELS = {
               <div class="overflow-hidden rounded-2xl bg-surface shadow-card">
                 @for (matter of group.matters; track matter.id) {
                   <article
+                    (click)="store.setCursorTo(matter.id)"
+                    [attr.data-trust]="trust(matter)"
                     class="flex items-center gap-3 border-b border-hairline px-4 py-3 last:border-b-0"
+                    [class.bg-accent-soft]="isCursor(matter)"
                   >
                     <button
                       type="button"
@@ -189,6 +208,16 @@ const CHANNEL_LABELS = {
               {{ store.isLoading() ? 'Loading…' : 'Load more' }}
             </button>
           }
+
+          <!-- Stated, not discovered. A keyboard interface nobody knows about
+               is the same as no keyboard interface. -->
+          <p class="mt-6 text-center text-micro text-ink-subtle">
+            <kbd class="rounded bg-surface-sunken px-1">J</kbd>
+            <kbd class="rounded bg-surface-sunken px-1">K</kbd> move ·
+            <kbd class="rounded bg-surface-sunken px-1">E</kbd> complete ·
+            <kbd class="rounded bg-surface-sunken px-1">S</kbd> snooze ·
+            <kbd class="rounded bg-surface-sunken px-1">⌘K</kbd> commands
+          </p>
         }
       </div>
     </div>
@@ -196,14 +225,69 @@ const CHANNEL_LABELS = {
 })
 export class MattersPage {
   protected readonly store = inject(MattersStore);
+  protected readonly crossFilter = inject(DashboardFilterStore);
   private readonly session = inject(SessionStore);
 
   protected readonly sorts = MATTER_SORTS;
   protected readonly skeletonRows = [0, 1, 2, 3, 4, 5];
   protected readonly CHANNEL_LABELS = CHANNEL_LABELS;
   protected readonly hasAssumedTime = hasAssumedTime;
+  protected readonly trust = trustOf;
 
   private readonly tag = computed(() => this.session.account()?.locale ?? 'en-GB');
+
+  protected isCursor(matter: Matter): boolean {
+    return this.store.cursorMatter()?.id === matter.id;
+  }
+
+  protected crossFilterLabel(): string {
+    const domain = this.crossFilter.domain();
+    const range = this.crossFilter.range();
+    return [domain ? DOMAIN_META[domain].label : null, range?.label].filter(Boolean).join(' · ');
+  }
+
+  /**
+   * Vim-style triage: J/K to move, E to complete, S to snooze.
+   *
+   * Ignored while a text field has focus, without exception. Someone typing
+   * "insurance" into the search box must not complete four matters on the way
+   * through — this is the bug that makes people stop trusting keyboard
+   * shortcuts, and it is silent when it happens.
+   *
+   * Also ignored when a modifier is held, so browser and OS shortcuts keep
+   * working and ⌘K reaches the palette rather than being eaten here.
+   */
+  protected onKeydown(event: KeyboardEvent): void {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+    const target = event.target as HTMLElement | null;
+    if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) {
+      return;
+    }
+
+    const matter = this.store.cursorMatter();
+
+    switch (event.key.toLowerCase()) {
+      case 'j':
+        event.preventDefault();
+        this.store.moveCursor(1);
+        break;
+      case 'k':
+        event.preventDefault();
+        this.store.moveCursor(-1);
+        break;
+      case 'e':
+        if (!matter || matter.status === 'done') return;
+        event.preventDefault();
+        void this.store.complete(matter);
+        break;
+      case 's':
+        if (!matter) return;
+        event.preventDefault();
+        void this.store.snooze(matter);
+        break;
+    }
+  }
 
   protected summary(): string {
     const loaded = this.store.matters().length;

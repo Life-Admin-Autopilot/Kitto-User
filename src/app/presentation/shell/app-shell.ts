@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
+import { CommandPalette } from './command-palette';
 import { Sidebar } from './sidebar';
 
 /**
@@ -15,7 +16,7 @@ import { Sidebar } from './sidebar';
 @Component({
   selector: 'app-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, Sidebar],
+  imports: [RouterOutlet, Sidebar, CommandPalette],
   template: `
     <div class="flex min-h-dvh bg-canvas">
       <app-sidebar />
@@ -23,6 +24,9 @@ import { Sidebar } from './sidebar';
         <router-outlet />
       </main>
     </div>
+    <!-- Mounted here, not per page: the shortcut has to work on every route,
+         and one instance means the command list cannot drift between them. -->
+    <app-command-palette />
   `,
 })
 export class AppShell {}
