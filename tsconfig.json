@@ -13,7 +13,30 @@
     "experimentalDecorators": true,
     "importHelpers": true,
     "target": "ES2022",
-    "module": "preserve"
+    "module": "preserve",
+    /*
+     * One alias per Clean Architecture layer. These are not cosmetic — they are
+     * what makes a dependency-rule violation VISIBLE in a diff. An import of
+     * `@infrastructure/...` inside a domain file is a one-line review catch;
+     * the same violation written as `../../infrastructure/...` is not.
+     *
+     * The rule, innermost outward:
+     *   domain/         imports NOTHING. No Angular, no RxJS, no HttpClient.
+     *   application/    imports domain only.
+     *   infrastructure/ imports domain (implements its ports).
+     *   presentation/   imports application + domain types.
+     * Nothing imports presentation. Nothing imports infrastructure except the
+     * composition root (app.config.ts), which is the only place allowed to bind
+     * a port to an adapter.
+     */
+    "baseUrl": ".",
+    "paths": {
+      "@domain/*": ["src/app/domain/*"],
+      "@application/*": ["src/app/application/*"],
+      "@infrastructure/*": ["src/app/infrastructure/*"],
+      "@presentation/*": ["src/app/presentation/*"],
+      "@env/*": ["src/environments/*"]
+    }
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

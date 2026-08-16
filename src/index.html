@@ -2,10 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>LifeAdminAutopilotDashboard</title>
+  <title>Kitto</title>
   <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!--
+    Fraunces + Nunito, the pairing that carries Kitto's identity. Both are
+    variable fonts; Fraunces needs its SOFT/WONK axes, which styles.css sets.
+
+    `display=swap` on purpose: the dashboard's first paint is a sidebar and a
+    table, and a blocked render waiting on a webfont is worse than one frame of
+    the system stack. The two preconnects are what keep that frame short.
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Nunito:wght@400..800&display=swap"
+    rel="stylesheet">
 </head>
 <body>
   <app-root></app-root>

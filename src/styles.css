@@ -1,1 +1,250 @@
-/* You can add global styles to this file, and also import other style files */
+@import 'tailwindcss';
+
+/*
+ * Kitto design tokens — the "soft planner" identity, ported from the mobile
+ * app's app/globals.css so the dashboard and the phone read as one product.
+ *
+ * The values are copied verbatim rather than re-picked. Two surfaces of the
+ * same product drifting to two near-identical corals is worse than either
+ * coral, and "near-identical" is exactly what re-picking by eye produces.
+ *
+ * Tailwind v4 is CSS-first: tokens declared in `@theme` generate the semantic
+ * utilities (bg-canvas, text-ink-muted, text-display-md, shadow-card). There is
+ * no tailwind.config.js and there must not be one.
+ *
+ * Dark mode is class-based (`.dark` on <html>) rather than media-query based,
+ * because the account stores an explicit theme choice — system / light / dark —
+ * and a media query cannot express "the user picked light on a dark OS".
+ *
+ * What is deliberately NOT ported: the shadcn variable bridge (no shadcn here),
+ * the four gradient surfaces (they belong to welcome/onboarding/celebration,
+ * none of which the dashboard has), the ghost-gaze keyframes, and the measured
+ * iOS spring easings (they exist for a native shell this app does not have).
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* ---- Surfaces — near-white, faintly lilac ---- */
+  --color-canvas: rgb(249 248 252);
+  --color-canvas-veined: rgb(244 242 249);
+  --color-surface: rgb(255 255 255);
+  --color-surface-sunken: rgb(242 241 246);
+  --color-surface-field: rgb(234 231 225); /* warm taupe — inputs, value pills */
+  --color-border-strong: rgb(220 218 226);
+  --color-hairline: rgb(236 236 236);
+
+  /* ---- Ink — warm near-black ---- */
+  --color-ink: rgb(26 24 26);
+  --color-ink-muted: rgb(138 138 142);
+  --color-ink-subtle: rgb(184 183 191);
+  --color-ink-nav: rgb(155 155 160);
+
+  /* ---- Accent — coral. Active / progress / selected / live. NEVER the CTA ---- */
+  --color-accent: rgb(250 106 90);
+  --color-accent-pressed: rgb(224 84 68);
+  --color-accent-soft: rgb(255 233 228);
+  --color-accent-ink: rgb(255 255 255);
+
+  /* ---- Solid — the near-black primary CTA pill ---- */
+  --color-solid: rgb(28 26 23);
+  --color-solid-ink: rgb(255 255 255);
+
+  /* ---- Gold — premium tier only (sparing) ---- */
+  --color-gold: rgb(176 137 47);
+  --color-gold-soft: rgb(239 230 210);
+
+  /* ---- Status ---- */
+  --color-success: rgb(52 199 89);
+  --color-success-soft: rgb(223 244 230);
+  --color-danger: rgb(229 72 77);
+  --color-danger-soft: rgb(250 228 229);
+  --color-warning: rgb(217 138 43);
+  --color-warning-soft: rgb(251 238 221);
+
+  /* ---- Priority (pill fg on soft bg) ---- */
+  --color-priority-high: rgb(192 64 91);
+  --color-priority-high-soft: rgb(246 228 231);
+  --color-priority-med: rgb(217 138 43);
+  --color-priority-med-soft: rgb(251 238 221);
+  --color-priority-low: rgb(126 134 216);
+  --color-priority-low-soft: rgb(230 231 247);
+
+  /* ---- Time-of-day bucket tints (section headers) ---- */
+  --color-bucket-anytime: rgb(241 241 240);
+  --color-bucket-morning: rgb(251 231 228);
+  --color-bucket-afternoon: rgb(231 233 250);
+  --color-bucket-evening: rgb(237 228 247);
+
+  /*
+   * ---- Domains — the six life-admin domains, on the shared pastel set ----
+   * Theme-INVARIANT, and absent from `.dark` on purpose: this is the one place
+   * in the product where hue carries meaning ("which part of your life"), and
+   * dimming it for dark mode throws that meaning away. Same rule the mobile app
+   * follows for its category chips.
+   */
+  --color-domain-health: rgb(183 199 180); /* sage */
+  --color-domain-health-ink: rgb(42 92 66);
+  --color-domain-home: rgb(245 223 200); /* peach */
+  --color-domain-home-ink: rgb(120 82 48);
+  --color-domain-car: rgb(199 210 245); /* periwinkle */
+  --color-domain-car-ink: rgb(62 68 120);
+  --color-domain-finance: rgb(203 217 240); /* sky */
+  --color-domain-finance-ink: rgb(42 74 122);
+  --color-domain-family: rgb(251 227 230); /* blush */
+  --color-domain-family-ink: rgb(122 48 76);
+  --color-domain-pets: rgb(201 190 243); /* lilac */
+  --color-domain-pets-ink: rgb(92 56 140);
+
+  /*
+   * ---- Type ----
+   * Fraunces for headline moments only — page titles, big numerals, day
+   * headers. Nunito for everything functional. Hierarchy comes from scale
+   * contrast and the serif/sans split, never from colour.
+   *
+   * Loaded via <link> in index.html. Arabic falls through to system faces
+   * because Fraunces carries no Arabic — in Arabic the hierarchy is carried by
+   * scale and weight alone.
+   */
+  --font-display: 'Fraunces', -apple-system, system-ui, ui-serif, Georgia, serif;
+  --font-sans: 'Nunito', -apple-system, system-ui, ui-rounded, ui-sans-serif, sans-serif;
+
+  --text-display-hero: 44px;
+  --text-display-hero--line-height: 48px;
+  --text-display-hero--font-weight: 500;
+  --text-display-hero--letter-spacing: -0.01em;
+  --text-display-md: 32px;
+  --text-display-md--line-height: 38px;
+  --text-display-md--font-weight: 500;
+  --text-display-md--letter-spacing: -0.01em;
+  --text-heading-serif: 26px;
+  --text-heading-serif--line-height: 32px;
+  --text-heading-serif--font-weight: 500;
+
+  --text-heading-xl: 24px;
+  --text-heading-xl--line-height: 30px;
+  --text-heading-xl--font-weight: 700;
+  --text-heading-xl--letter-spacing: -0.005em;
+  --text-heading-md: 20px;
+  --text-heading-md--line-height: 28px;
+  --text-heading-md--font-weight: 700;
+  --text-heading-sm: 18px;
+  --text-heading-sm--line-height: 24px;
+  --text-heading-sm--font-weight: 700;
+  --text-body: 16px;
+  --text-body--line-height: 24px;
+  --text-body--font-weight: 500;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 20px;
+  --text-body-sm--font-weight: 500;
+  --text-label: 13px;
+  --text-label--line-height: 16px;
+  --text-label--font-weight: 700;
+  --text-label--letter-spacing: 0.08em;
+  --text-caption: 13px;
+  --text-caption--line-height: 18px;
+  --text-caption--font-weight: 400;
+  --text-micro: 11px;
+  --text-micro--line-height: 14px;
+  --text-micro--font-weight: 600;
+
+  /* ---- Radius — nothing sharp: everything is a pill or a large round ---- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 30px;
+  --radius-tile: 14px;
+  --radius-pill: 9999px;
+
+  /* ---- Shadows — whisper-soft and diffuse, never a hard edge ---- */
+  --shadow-card: 0 2px 8px rgb(20 20 40 / 0.04), 0 1px 3px rgb(20 20 40 / 0.03);
+  --shadow-elevated: 0 8px 28px rgb(20 20 40 / 0.08), 0 2px 6px rgb(20 20 40 / 0.05);
+  --shadow-halo: 0 6px 20px rgb(0 0 0 / 0.08);
+
+  /* ---- Motion ---- */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/*
+ * Dark palette — near-true-black. Depth comes from surface-lightness stepping
+ * (canvas 3 → surface 20 → field 34), not from shadow. Dark is a designed
+ * theme, not a dimmed light one.
+ */
+.dark {
+  --color-canvas: rgb(3 3 3);
+  --color-canvas-veined: rgb(12 12 14);
+  --color-surface: rgb(20 20 22);
+  --color-surface-sunken: rgb(24 24 26);
+  --color-surface-field: rgb(34 34 36);
+  --color-border-strong: rgb(52 52 56);
+  --color-hairline: rgb(36 36 38);
+
+  --color-ink: rgb(245 245 247);
+  --color-ink-muted: rgb(154 154 160);
+  --color-ink-subtle: rgb(120 120 126);
+  --color-ink-nav: rgb(150 150 156);
+
+  --color-accent: rgb(255 138 122);
+  --color-accent-pressed: rgb(240 118 104);
+  --color-accent-soft: rgb(71 42 38);
+  --color-accent-ink: rgb(255 255 255);
+
+  /* The CTA pill inverts: near-white fill, near-black label. */
+  --color-solid: rgb(245 245 247);
+  --color-solid-ink: rgb(20 20 22);
+
+  --color-gold: rgb(212 168 92);
+  --color-gold-soft: rgb(64 54 34);
+
+  --color-success: rgb(64 208 112);
+  --color-success-soft: rgb(24 46 32);
+  --color-danger: rgb(240 110 114);
+  --color-danger-soft: rgb(58 30 32);
+  --color-warning: rgb(224 158 74);
+  --color-warning-soft: rgb(58 46 22);
+
+  --color-priority-high: rgb(240 138 160);
+  --color-priority-high-soft: rgb(58 37 48);
+  --color-priority-med: rgb(224 158 74);
+  --color-priority-med-soft: rgb(58 51 32);
+  --color-priority-low: rgb(160 168 240);
+  --color-priority-low-soft: rgb(38 38 58);
+
+  --color-bucket-anytime: rgb(30 30 32);
+  --color-bucket-morning: rgb(58 38 40);
+  --color-bucket-afternoon: rgb(40 42 64);
+  --color-bucket-evening: rgb(42 39 64);
+
+  --shadow-card: 0 2px 8px rgb(0 0 0 / 0.4);
+  --shadow-elevated: 0 10px 34px rgb(0 0 0 / 0.5);
+  --shadow-halo: 0 6px 20px rgb(0 0 0 / 0.55);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+  }
+  body {
+    margin: 0;
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  /*
+   * Fraunces is only itself once its axes are set. Left at the defaults it
+   * renders the opsz-14 TEXT cut — dense and low-contrast, clunky at hero
+   * sizes. `font-optical-sizing: auto` lets the browser track opsz to the
+   * computed size; SOFT rounds the terminals so the serif reads warm rather
+   * than austere. Naming `opsz` in font-variation-settings would disable the
+   * automatic optical sizing we just asked for, so only SOFT/WONK go there.
+   */
+  .font-display {
+    font-optical-sizing: auto;
+    font-variation-settings: 'SOFT' 40, 'WONK' 0;
+  }
+  /* Tabular numerals on time / money / date / count fields. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
