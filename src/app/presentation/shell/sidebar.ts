@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 
 import { SessionStore } from '@application/auth/session.store';
+import { ThemeStore } from '@application/theme/theme.store';
 import { firstNameOf } from '@domain/auth/session';
 
 interface NavEntry {
@@ -78,6 +79,29 @@ const NAV: readonly NavEntry[] = [
 
       <div class="mt-auto flex flex-col gap-1 border-t border-hairline pt-4">
         <p class="truncate px-3 text-caption text-ink-muted">{{ email() }}</p>
+
+        <button
+          type="button"
+          (click)="theme.cycle()"
+          [attr.aria-label]="'Theme: ' + theme.preference() + '. Change.'"
+          class="flex items-center gap-3 rounded-pill px-3 py-2 text-body-sm text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
+        >
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path [attr.d]="themeIcon()" />
+          </svg>
+          <span class="capitalize">{{ theme.preference() }}</span>
+        </button>
+
         <button
           type="button"
           (click)="signOut()"
@@ -92,8 +116,22 @@ const NAV: readonly NavEntry[] = [
 export class Sidebar {
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
+  protected readonly theme = inject(ThemeStore);
 
   protected readonly nav = NAV;
+
+  /** Sun, moon, or monitor — whichever names the CHOICE, not the result. A
+   *  `system` preference showing a moon would suggest dark was picked. */
+  protected themeIcon(): string {
+    switch (this.theme.preference()) {
+      case 'light':
+        return 'M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z';
+      case 'dark':
+        return 'M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z';
+      default:
+        return 'M8 21h8M12 17v4M4 4h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z';
+    }
+  }
 
   protected email(): string {
     return this.session.account()?.email ?? firstNameOf(null, 'Account');

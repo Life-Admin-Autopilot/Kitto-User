@@ -20,6 +20,34 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Nunito:wght@400..800&display=swap"
     rel="stylesheet">
+
+  <!--
+    Set the palette BEFORE first paint.
+
+    ThemeStore does this properly once Angular boots, but "once Angular boots"
+    is several hundred milliseconds of white screen for a dark-mode user — and a
+    flash of the wrong palette is the single most noticeable bug a themed app
+    can ship. This runs synchronously in <head>, so the class is on <html>
+    before the browser paints anything.
+
+    Deliberately duplicated logic, not shared: a module import would defeat the
+    point by being async. It reads the same storage key and the same media
+    query, and ThemeStore takes over seamlessly because it computes the same
+    answer.
+  -->
+  <script>
+    (function () {
+      try {
+        var stored = localStorage.getItem('lifeadmin.theme');
+        var dark =
+          stored === 'dark' ||
+          (stored !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('dark');
+      } catch (e) {
+        /* storage disabled — fall through to light, which is the default */
+      }
+    })();
+  </script>
 </head>
 <body>
   <app-root></app-root>
