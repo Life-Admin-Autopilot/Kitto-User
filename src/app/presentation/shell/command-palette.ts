@@ -1,7 +1,17 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  computed,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { Router } from '@angular/router';
 
 import { DashboardFilterStore } from '@application/shared/dashboard-filter.store';
+import { OverlayStore } from '@application/shared/overlay.store';
 import { ThemeStore } from '@application/theme/theme.store';
 import { TrustLensStore } from '@application/shared/trust-lens.store';
 import { MATTER_DOMAINS, type MatterDomain } from '@domain/matters/matter';
@@ -49,6 +59,11 @@ interface Command {
           class="w-full max-w-lg overflow-hidden rounded-2xl bg-surface shadow-elevated"
           (click)="$event.stopPropagation()"
         >
+          <!-- Focus is load-bearing, not a nicety. Without it every letter
+               typed here reaches the document and is read by the Matters
+               page's J/K/E/S handler, so typing "settings" would complete and
+               snooze matters silently. OverlayStore is the second line of
+               defence for the same reason. -->
           <input
             #field
             type="text"
@@ -85,10 +100,24 @@ export class CommandPalette {
   private readonly filter = inject(DashboardFilterStore);
   private readonly lens = inject(TrustLensStore);
   private readonly theme = inject(ThemeStore);
+  private readonly overlay = inject(OverlayStore);
+
+  private readonly field = viewChild<ElementRef<HTMLInputElement>>('field');
 
   protected readonly open = signal(false);
   protected readonly query = signal('');
   protected readonly active = signal(0);
+
+  constructor() {
+    // Focus the field as soon as it exists, and claim the keyboard for as long
+    // as the palette is up. `afterNextRender` timing is what the viewChild
+    // signal gives us for free: it only resolves once the element is in the DOM.
+    effect(() => {
+      if (this.open()) {
+        this.field()?.nativeElement.focus();
+      }
+    });
+  }
 
   private readonly commands = computed<Command[]>(() => [
     {
@@ -207,13 +236,20 @@ export class CommandPalette {
   }
 
   protected close(): void {
+    if (!this.open()) return;
     this.open.set(false);
     this.query.set('');
     this.active.set(0);
+    this.overlay.release();
   }
 
   private toggle(): void {
-    this.open() ? this.close() : this.open.set(true);
+    if (this.open()) {
+      this.close();
+      return;
+    }
+    this.open.set(true);
+    this.overlay.claim();
   }
 
   private applyDomain(domain: MatterDomain): void {

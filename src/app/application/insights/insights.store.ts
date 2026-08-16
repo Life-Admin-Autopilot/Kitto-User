@@ -1,8 +1,8 @@
 import { Injectable, computed, inject, resource, signal } from '@angular/core';
 
 import { SessionStore } from '@application/auth/session.store';
-import { addDays, startOfDay } from '@application/calendar/calendar-month';
-import { DashboardFilterStore } from '@application/shared/dashboard-filter.store';
+import { addDays, firstDayOfWeek, startOfDay } from '@application/calendar/calendar-month';
+import { DashboardFilterStore, type DateRange } from '@application/shared/dashboard-filter.store';
 import {
   MATTER_DOMAINS,
   captureChannelOf,
@@ -18,13 +18,21 @@ import {
   buildHeatmap,
   buildPipeline,
   projectInaction,
+  type HeatmapMode,
 } from './insights-math';
 
 /** The weekly chart's span. */
 export const TREND_WEEKS = 12;
 
-/** The heatmap's span. One fetch serves both — see `completedResource`. */
-export const HEATMAP_DAYS = 364;
+/**
+ * The heatmap's span, in whole weeks. 53 covers a year and guarantees the grid
+ * starts on a week boundary rather than mid-week.
+ */
+export const HEATMAP_WEEKS = 53;
+
+/** Days of history to fetch. A little over the heatmap's span, so the leftmost
+ *  column is full rather than half-empty for reasons of arithmetic. */
+export const HISTORY_DAYS = HEATMAP_WEEKS * 7 + 7;
 
 /** How far ahead "what if I did nothing" looks. */
 export const PROJECTION_DAYS = 14;
@@ -66,7 +74,41 @@ export class InsightsStore {
   /** Captured once, so every bucket boundary on the page agrees with the rest. */
   readonly now = signal(startOfDay(new Date())).asReadonly();
 
-  readonly windowStart = computed(() => addDays(this.now(), -HEATMAP_DAYS));
+  readonly windowStart = computed(() => addDays(this.now(), -HISTORY_DAYS));
+
+  /**
+   * Which timestamp the heatmap counts against.
+   *
+   * A toggle rather than a fixed choice, because "what fell due" and "what I
+   * cleared" are genuinely different questions and the honest answer is to let
+   * the reader pick. The default is `due`: every matter has a due date, while
+   * only completed ones have a completion date, so `completed` draws a
+   * necessarily sparser and more flattering picture.
+   */
+  private readonly heatmapModeSignal = signal<HeatmapMode>('due');
+  readonly heatmapMode = this.heatmapModeSignal.asReadonly();
+
+  setHeatmapMode(mode: HeatmapMode): void {
+    this.heatmapModeSignal.set(mode);
+  }
+
+  /**
+   * The Intl tag every panel formats with.
+   *
+   * The ACCOUNT's language, not the browser's. Passing `undefined` to
+   * `Intl.DateTimeFormat` resolves to the browser, so an Arabic account read on
+   * a borrowed English laptop got Arabic chrome wrapped around English month
+   * names — the exact bug the mobile app's dateFormat module exists to prevent.
+   */
+  readonly intlTag = computed(() => this.session.account()?.locale ?? 'en-GB');
+
+  private readonly monthFormatter = computed(
+    () => new Intl.DateTimeFormat(this.intlTag(), { month: 'short' }),
+  );
+
+  private readonly weekdayFormatter = computed(
+    () => new Intl.DateTimeFormat(this.intlTag(), { weekday: 'short' }),
+  );
 
   private readonly countsResource = resource({
     params: () => ({ tz: this.session.timeZone() }),
@@ -118,13 +160,43 @@ export class InsightsStore {
   // lose the instant feedback that makes cross-filtering worth having at all.
 
   private readonly domainFilter = computed(() => this.crossFilter.domain());
+  private readonly rangeFilter = computed(() => this.crossFilter.range());
 
+  /**
+   * Each set is filtered on the timestamp it is ABOUT.
+   *
+   * The backlog is filtered by `dueAt` and the completed set by `completedAt`,
+   * because a span brushed on the completion chart means "this period" and the
+   * two sets record that period with different fields. Filtering both on one
+   * field would drop every open matter (they have no `completedAt`) and quietly
+   * empty half the page.
+   */
   private readonly openMatters = computed(() =>
-    applyDomain(this.openResource.value().matters, this.domainFilter()),
+    applyFilters(this.openResource.value().matters, this.domainFilter(), this.rangeFilter(), 'due'),
   );
 
   private readonly completedMatters = computed(() =>
-    applyDomain(this.completedResource.value().matters, this.domainFilter()),
+    applyFilters(
+      this.completedResource.value().matters,
+      this.domainFilter(),
+      this.rangeFilter(),
+      'completed',
+    ),
+  );
+
+  /**
+   * The completed set WITHOUT the range filter — what the trend chart draws.
+   *
+   * The chart is the control that sets the range, so feeding it the range would
+   * make it erase itself: brush three weeks, every other bar drops to zero, and
+   * there is nothing left to drag across to widen the selection again. A brush
+   * must never filter its own source.
+   *
+   * The domain filter still applies, because that one comes from elsewhere and
+   * narrowing the chart to a domain is the point of clicking a domain.
+   */
+  private readonly completedForTrend = computed(() =>
+    applyFilters(this.completedResource.value().matters, this.domainFilter(), null, 'completed'),
   );
 
   /** Everything in the window, both states — what the pipeline is built from. */
@@ -147,15 +219,32 @@ export class InsightsStore {
   // ---- The panels ----------------------------------------------------------
 
   readonly weeks = computed(() =>
-    bucketByWeek(this.completedMatters(), this.now(), TREND_WEEKS),
+    bucketByWeek(this.completedForTrend(), this.now(), TREND_WEEKS),
   );
 
   readonly peakWeek = computed(() =>
     this.weeks().reduce((max, week) => Math.max(max, week.completed), 0),
   );
 
+  /**
+   * The heatmap reads whichever set its mode is about.
+   *
+   * `due` spans everything, because an open matter's due date is as real as a
+   * finished one's; `completed` reads only the finished set, because an open
+   * matter has no completion date and including it would silently fall back to
+   * some other timestamp — which is exactly the ambiguity the mode exists to
+   * remove.
+   */
   readonly heatmap = computed(() =>
-    buildHeatmap(this.allMatters(), this.now(), HEATMAP_DAYS),
+    buildHeatmap(
+      this.heatmapModeSignal() === 'completed' ? this.completedMatters() : this.allMatters(),
+      this.now(),
+      HEATMAP_WEEKS,
+      firstDayOfWeek(this.intlTag()),
+      this.heatmapModeSignal(),
+      this.monthFormatter(),
+      this.weekdayFormatter(),
+    ),
   );
 
   readonly pipeline = computed(() => buildPipeline(this.allMatters(), this.now()));
@@ -252,9 +341,35 @@ export class InsightsStore {
   }
 }
 
-function applyDomain(
+function applyFilters(
   matters: readonly Matter[],
   domain: MatterDomain | null,
+  range: DateRange | null,
+  stamp: 'due' | 'completed',
 ): readonly Matter[] {
-  return domain ? matters.filter((matter) => matter.domain === domain) : matters;
+  let filtered = matters;
+
+  if (domain) {
+    filtered = filtered.filter((matter) => matter.domain === domain);
+  }
+
+  if (range) {
+    const after = new Date(range.after).getTime();
+    const before = new Date(range.before).getTime();
+    filtered = filtered.filter((matter) => {
+      // The range's own basis wins where the set can honour it: a completion
+      // span asked about completions. The open backlog has no completedAt, so
+      // it falls back to its due date rather than filtering itself to nothing.
+      const preferred = range.basis === 'completed' ? matter.completedAt : matter.dueAt;
+      const value = preferred ?? (stamp === 'completed' ? matter.completedAt : matter.dueAt);
+      // An undated matter is not "outside the range" — it has no position on
+      // the timeline at all. Excluding it is right: a brushed span is a
+      // question about a period, and a matter with no date cannot answer it.
+      if (!value) return false;
+      const at = new Date(value).getTime();
+      return at >= after && at < before;
+    });
+  }
+
+  return filtered;
 }

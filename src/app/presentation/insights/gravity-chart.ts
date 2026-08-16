@@ -121,6 +121,9 @@ interface Bubble {
 })
 export class GravityChart {
   readonly points = input.required<readonly GravityPoint[]>();
+  readonly locale = input('en-GB');
+
+  private readonly number = computed(() => new Intl.NumberFormat(this.locale()));
 
   protected readonly width = WIDTH;
   protected readonly height = HEIGHT;
@@ -147,7 +150,7 @@ export class GravityChart {
       cy: this.yFor(point.pushes),
       r: RADIUS[point.matter.priority],
       fill: DOMAIN_META[point.matter.domain].cssVar,
-      title: `${point.matter.title} — ${point.daysOverdue}d late, moved ${point.pushes}×`,
+      title: `${point.matter.title} — ${this.number().format(point.daysOverdue)}d late, moved ${this.number().format(point.pushes)}×`,
     })),
   );
 

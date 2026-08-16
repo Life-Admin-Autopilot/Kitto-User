@@ -9,6 +9,17 @@ export interface DateRange {
   readonly before: string;
   /** What to call this range in the filter chip. */
   readonly label: string;
+  /**
+   * Which timestamp the span is about.
+   *
+   * Load-bearing, not metadata. A span brushed on the COMPLETION chart means
+   * "things finished then", and applying it as a due-date filter answers a
+   * different question entirely — the drill-down showed open matters due in
+   * that window instead of the completions that were just selected, which the
+   * default status filter then hid anyway. The basis travels with the range so
+   * every consumer applies it to the right field.
+   */
+  readonly basis: 'due' | 'completed';
 }
 
 /**

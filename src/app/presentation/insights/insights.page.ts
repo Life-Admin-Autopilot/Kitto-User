@@ -89,21 +89,27 @@ const CHANNEL_META: Record<CaptureChannel, { label: string; bar: string; note: s
             <p class="mb-4 text-caption text-ink-muted">
               Rolling seven-day spans, so the last bar is comparable with the rest.
             </p>
-            <app-completion-trend [weeks]="store.weeks()" />
+            <app-completion-trend [weeks]="store.weeks()" [locale]="store.intlTag()" />
           </section>
 
           <section class="rounded-2xl bg-surface p-5 shadow-card">
-            <h2 class="mb-1 text-heading-sm text-ink">A year of life admin</h2>
-            <p class="mb-4 text-caption text-ink-muted">
-              One square per day, coloured by the part of your life it belonged to.
-            </p>
-            <app-year-heatmap [cells]="store.heatmap()" />
+            <h2 class="mb-3 text-heading-sm text-ink">A year of life admin</h2>
+            <app-year-heatmap
+              [grid]="store.heatmap()"
+              [mode]="store.heatmapMode()"
+              [locale]="store.intlTag()"
+              (modeChange)="store.setHeatmapMode($event)"
+            />
           </section>
 
           <section class="rounded-2xl bg-surface p-5 shadow-card">
             <h2 class="mb-1 text-heading-sm text-ink">How your admin flows</h2>
+            <!-- Says exactly which set this describes. The two halves are drawn
+                 from different windows — the whole open backlog, and a year of
+                 completions — so a bare "your matters" would overstate how much
+                 of your admin is still open. -->
             <p class="mb-4 text-caption text-ink-muted">
-              How each matter arrived, where it was filed, and what became of it.
+              Your open backlog, plus everything completed in the last year.
             </p>
             <app-pipeline-sankey [pipeline]="store.pipeline()" />
           </section>
@@ -114,7 +120,7 @@ const CHANNEL_META: Record<CaptureChannel, { label: string; bar: string; note: s
               <p class="mb-4 text-caption text-ink-muted">
                 Late against how often it has been moved. Bottom-right is avoidance.
               </p>
-              <app-gravity-chart [points]="store.gravity()" />
+              <app-gravity-chart [points]="store.gravity()" [locale]="store.intlTag()" />
             </section>
 
             <section class="rounded-2xl bg-surface p-5 shadow-card">
@@ -123,7 +129,7 @@ const CHANNEL_META: Record<CaptureChannel, { label: string; bar: string; note: s
                 {{ store.projectedOverdue() }} matters would be overdue in
                 {{ projectionDays }} days. Pure arithmetic — nothing here is predicted.
               </p>
-              <app-inaction-projection [days]="store.projection()" />
+              <app-inaction-projection [days]="store.projection()" [locale]="store.intlTag()" />
             </section>
 
             <section class="rounded-2xl bg-surface p-5 shadow-card">

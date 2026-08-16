@@ -1,13 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject } from '@angular/core';
 
 import { SessionStore } from '@application/auth/session.store';
 import { MattersStore, type GroupMode } from '@application/matters/matters.store';
 import { DashboardFilterStore } from '@application/shared/dashboard-filter.store';
+import { OverlayStore } from '@application/shared/overlay.store';
 import { trustOf } from '@application/shared/trust-lens.store';
 import { captureChannelOf, hasAssumedTime, type Matter } from '@domain/matters/matter';
 import { MATTER_SORTS, type MatterSort } from '@domain/matters/matter-query';
 import { DOMAIN_META, PRIORITY_META } from '@presentation/shared/domain-meta';
 import { dueLabel } from '@presentation/shared/due-label';
+import { isImported, sourceLabel } from '@presentation/shared/source-meta';
 import { FilterRail } from './filter-rail';
 
 const SORT_LABELS: Record<MatterSort, string> = {
@@ -87,6 +89,19 @@ const CHANNEL_LABELS = {
           </div>
         </header>
 
+        <!-- A rejected write used to be completely silent: the promise was
+             dropped, the row stayed as it was, and nothing said the change had
+             not been saved. -->
+        @if (store.actionError(); as message) {
+          <div
+            role="alert"
+            class="mb-3 flex items-center gap-3 rounded-lg bg-danger-soft px-3 py-2 text-body-sm text-danger"
+          >
+            <span class="flex-1">{{ message }}</span>
+            <button type="button" (click)="store.clearActionError()" aria-label="Dismiss">✕</button>
+          </div>
+        }
+
         @if (store.error()) {
           <div class="rounded-2xl bg-danger-soft px-4 py-3 text-body-sm text-danger">
             <p>Could not load matters.</p>
@@ -127,17 +142,45 @@ const CHANNEL_LABELS = {
                 @for (matter of group.matters; track matter.id) {
                   <article
                     (click)="store.setCursorTo(matter.id)"
+                    [attr.data-matter-id]="matter.id"
                     [attr.data-trust]="trust(matter)"
                     class="flex items-center gap-3 border-b border-hairline px-4 py-3 last:border-b-0"
                     [class.bg-accent-soft]="isCursor(matter)"
                   >
+                    <!-- A toggle, never disabled. Ticking the wrong row on a
+                         dense table is the easiest mistake here to make, and a
+                         checkbox that cannot be unticked turns a slip into
+                         repair work. -->
                     <button
                       type="button"
-                      (click)="store.complete(matter)"
-                      [disabled]="matter.status === 'done'"
-                      [attr.aria-label]="'Complete ' + matter.title"
-                      class="size-5 shrink-0 rounded-full border-2 border-ink-subtle transition-colors hover:border-accent disabled:border-success disabled:bg-success"
-                    ></button>
+                      (click)="store.toggleComplete(matter)"
+                      [attr.aria-pressed]="matter.status === 'done'"
+                      [attr.aria-label]="
+                        (matter.status === 'done' ? 'Reopen ' : 'Complete ') + matter.title
+                      "
+                      [title]="matter.status === 'done' ? 'Reopen' : 'Complete'"
+                      class="grid size-5 shrink-0 place-items-center rounded-full border-2 transition-colors"
+                      [class.border-success]="matter.status === 'done'"
+                      [class.bg-success]="matter.status === 'done'"
+                      [class.border-ink-subtle]="matter.status !== 'done'"
+                      [class.hover:border-accent]="matter.status !== 'done'"
+                    >
+                      @if (matter.status === 'done') {
+                        <svg
+                          width="11"
+                          height="11"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="var(--color-surface)"
+                          stroke-width="3.5"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                      }
+                    </button>
 
                     <span
                       class="grid size-8 shrink-0 place-items-center rounded-full text-[13px]"
@@ -156,7 +199,17 @@ const CHANNEL_LABELS = {
                         {{ matter.title }}
                       </p>
                       <div class="flex items-center gap-2 text-micro text-ink-muted">
-                        <span>{{ CHANNEL_LABELS[channel(matter)] }}</span>
+                        <!-- Named service, not a generic "Synced": an imported
+                             Google event must be distinguishable from something
+                             you typed, or you cannot tell what deleting it
+                             would actually do. -->
+                        <span
+                          [class.rounded-pill]="imported(matter)"
+                          [class.bg-domain-car]="imported(matter)"
+                          [class.text-domain-car-ink]="imported(matter)"
+                          [class.px-1.5]="imported(matter)"
+                          >{{ source(matter) }}</span
+                        >
                         @if (matter.subtasks.length) {
                           <span class="tabular"
                             >{{ doneSteps(matter) }}/{{ matter.subtasks.length }} steps</span
@@ -226,7 +279,23 @@ const CHANNEL_LABELS = {
 export class MattersPage {
   protected readonly store = inject(MattersStore);
   protected readonly crossFilter = inject(DashboardFilterStore);
+  protected readonly overlay = inject(OverlayStore);
   private readonly session = inject(SessionStore);
+  private readonly host = inject(ElementRef<HTMLElement>);
+
+  constructor() {
+    // Keep the cursor on screen. Without this, J past the fold moved a
+    // highlight the user could not see — and then E completed a row they were
+    // not looking at, which is the worst possible outcome for a shortcut.
+    effect(() => {
+      const matter = this.store.cursorMatter();
+      if (!matter) return;
+      const row = (this.host.nativeElement as HTMLElement).querySelector(
+        `[data-matter-id="${matter.id}"]`,
+      );
+      row?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  }
 
   protected readonly sorts = MATTER_SORTS;
   protected readonly skeletonRows = [0, 1, 2, 3, 4, 5];
@@ -260,6 +329,11 @@ export class MattersPage {
   protected onKeydown(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
 
+    // An open overlay owns the keyboard. Checking the focus target alone left a
+    // window — between a dialog opening and its field taking focus — in which
+    // typed letters reached these shortcuts and silently changed matters.
+    if (this.overlay.keyboardCaptured()) return;
+
     const target = event.target as HTMLElement | null;
     if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) {
       return;
@@ -276,15 +350,17 @@ export class MattersPage {
         event.preventDefault();
         this.store.moveCursor(-1);
         break;
+      // Both are toggles, so the same key undoes what it just did. A shortcut
+      // that only goes one way is one an unfamiliar user cannot experiment with.
       case 'e':
-        if (!matter || matter.status === 'done') return;
+        if (!matter) return;
         event.preventDefault();
-        void this.store.complete(matter);
+        void this.store.toggleComplete(matter);
         break;
       case 's':
         if (!matter) return;
         event.preventDefault();
-        void this.store.snooze(matter);
+        void this.store.toggleSnooze(matter);
         break;
     }
   }
@@ -316,6 +392,14 @@ export class MattersPage {
 
   protected channel(matter: Matter) {
     return captureChannelOf(matter);
+  }
+
+  protected source(matter: Matter): string {
+    return sourceLabel(matter, captureChannelOf(matter));
+  }
+
+  protected imported(matter: Matter): boolean {
+    return isImported(matter);
   }
 
   protected doneSteps(matter: Matter): number {

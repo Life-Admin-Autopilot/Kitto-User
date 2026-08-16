@@ -4,8 +4,9 @@ import { CalendarStore } from '@application/calendar/calendar.store';
 import { DAYS_IN_WEEK, isSameDay, isSameMonth } from '@application/calendar/calendar-month';
 import { SessionStore } from '@application/auth/session.store';
 import { TrustLensStore, trustOf } from '@application/shared/trust-lens.store';
-import { hasAssumedTime, type Matter } from '@domain/matters/matter';
+import { captureChannelOf, hasAssumedTime, type Matter } from '@domain/matters/matter';
 import { DOMAIN_META } from '@presentation/shared/domain-meta';
+import { isImported, sourceLabel } from '@presentation/shared/source-meta';
 
 /** How many matters a cell shows before it collapses into a count. */
 const VISIBLE_PER_DAY = 3;
@@ -104,8 +105,12 @@ const VISIBLE_PER_DAY = 3;
         </div>
       } @else {
         @if (store.truncated()) {
+          <!-- Says what is actually true and what can actually be done. The
+               previous copy told the user to narrow the range; this view has no
+               filter of any kind, so that was advice they could not follow. -->
           <p class="mb-3 rounded-lg bg-warning-soft px-3 py-2 text-caption text-warning">
-            This month has more matters than the grid loaded. Narrow the range to see the rest.
+            This month holds more matters than the grid loaded, so some are not shown. The Matters
+            table can page through all of them.
           </p>
         }
 
@@ -151,6 +156,14 @@ const VISIBLE_PER_DAY = 3;
                       <span class="text-[10px] leading-none" aria-hidden="true">{{
                         emoji(matter)
                       }}</span>
+                      @if (imported(matter)) {
+                        <!-- A synced matter, marked. Small on purpose: it is a
+                             provenance note, not a warning. -->
+                        <span
+                          class="size-1 shrink-0 rounded-full bg-current opacity-70"
+                          aria-hidden="true"
+                        ></span>
+                      }
                       <span
                         class="truncate text-micro"
                         [class.line-through]="matter.status === 'done'"
@@ -276,7 +289,19 @@ export class CalendarPage {
     } else if (matter.dueAt) {
       parts.push('time not specified');
     }
+    // Name the service for anything imported. Without it a synced Google event
+    // is indistinguishable from something created here, which is exactly the
+    // confusion this grid was causing.
+    if (isImported(matter)) parts.push(`from ${this.source(matter)}`);
     return parts.join(' · ');
+  }
+
+  protected source(matter: Matter): string {
+    return sourceLabel(matter, captureChannelOf(matter));
+  }
+
+  protected imported(matter: Matter): boolean {
+    return isImported(matter);
   }
 
   protected readonly daysInWeek = DAYS_IN_WEEK;

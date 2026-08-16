@@ -60,8 +60,14 @@ import { DashboardFilterStore } from '@application/shared/dashboard-filter.store
 })
 export class CompletionTrend {
   readonly weeks = input.required<readonly WeekBucket[]>();
+  /** Account language, not the browser's — see InsightsStore.intlTag. */
+  readonly locale = input('en-GB');
 
   protected readonly filter = inject(DashboardFilterStore);
+
+  private readonly dayMonth = computed(
+    () => new Intl.DateTimeFormat(this.locale(), { day: 'numeric', month: 'short' }),
+  );
 
   private readonly anchor = signal<number | null>(null);
   private readonly head = signal<number | null>(null);
@@ -114,10 +120,16 @@ export class CompletionTrend {
     const to = weeks[Math.max(anchor, head)];
     if (!from || !to) return;
 
+    // `end` is EXCLUSIVE, so labelling with it named the day after the
+    // selection — a brush ending today read as ending tomorrow. The boundary
+    // stays exclusive for the filter; only the label steps back a day.
+    const lastDay = new Date(to.end.getTime() - 86_400_000);
+
     this.filter.setRange({
       after: from.start.toISOString(),
       before: to.end.toISOString(),
-      label: `${this.label(from.start)} – ${this.label(to.end)}`,
+      label: `completed ${this.label(from.start)} – ${this.label(lastDay)}`,
+      basis: 'completed',
     });
   }
 
@@ -140,7 +152,7 @@ export class CompletionTrend {
   }
 
   protected label(date: Date): string {
-    return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(date);
+    return this.dayMonth().format(date);
   }
 
   protected ariaFor(week: WeekBucket): string {

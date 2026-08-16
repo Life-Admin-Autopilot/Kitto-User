@@ -46,9 +46,14 @@ import type { ProjectionDay } from '@application/insights/insights-math';
 })
 export class InactionProjection {
   readonly days = input.required<readonly ProjectionDay[]>();
+  readonly locale = input('en-GB');
 
   private readonly peak = computed(() =>
     Math.max(1, ...this.days().map((day) => day.cumulative)),
+  );
+
+  private readonly fullDate = computed(
+    () => new Intl.DateTimeFormat(this.locale(), { dateStyle: 'medium' }),
   );
 
   /** The slice this day adds. */
@@ -62,7 +67,7 @@ export class InactionProjection {
   }
 
   protected tooltip(day: ProjectionDay): string {
-    const date = day.date.toDateString();
+    const date = this.fullDate().format(day.date);
     return day.falling > 0
       ? `${date} — ${day.falling} more falls due, ${day.cumulative} overdue in total`
       : `${date} — ${day.cumulative} overdue`;
