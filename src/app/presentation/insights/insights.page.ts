@@ -10,8 +10,8 @@ import { DOMAIN_META } from '@presentation/shared/domain-meta';
 import { CompletionTrend } from './completion-trend';
 import { GravityChart } from './gravity-chart';
 import { InactionProjection } from './inaction-projection';
+import { MoneyPanel } from './money/money-panel';
 import { PipelineSankey } from './pipeline-sankey';
-import { YearHeatmap } from './year-heatmap';
 
 const CHANNEL_META: Record<CaptureChannel, { label: string; bar: string; note: string }> = {
   voice: { label: 'Spoken', bar: 'bg-accent', note: 'captured by voice' },
@@ -28,7 +28,7 @@ const CHANNEL_META: Record<CaptureChannel, { label: string; bar: string; note: s
   selector: 'app-insights',
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [InsightsStore],
-  imports: [CompletionTrend, GravityChart, InactionProjection, PipelineSankey, YearHeatmap],
+  imports: [CompletionTrend, GravityChart, InactionProjection, MoneyPanel, PipelineSankey],
   template: `
     <div class="mx-auto max-w-5xl px-8 py-6">
       <header class="mb-5 flex flex-wrap items-center gap-3">
@@ -97,15 +97,11 @@ const CHANNEL_META: Record<CaptureChannel, { label: string; bar: string; note: s
             <app-completion-trend [weeks]="store.weeks()" [locale]="store.intlTag()" />
           </section>
 
-          <section class="rounded-2xl bg-surface p-5 shadow-card">
-            <h2 class="mb-3 text-heading-sm text-ink">A year of life admin</h2>
-            <app-year-heatmap
-              [grid]="store.heatmap()"
-              [mode]="store.heatmapMode()"
-              [locale]="store.intlTag()"
-              (modeChange)="store.setHeatmapMode($event)"
-            />
-          </section>
+          <!-- Money is its own composite rather than a panel in the grid below:
+               it carries its own request, its own window control and its own
+               caveat, and every one of those would be wrong to share with the
+               matter-derived panels around it. -->
+          <app-money-panel />
 
           <section class="rounded-2xl bg-surface p-5 shadow-card">
             <h2 class="mb-1 text-heading-sm text-ink">How your admin flows</h2>

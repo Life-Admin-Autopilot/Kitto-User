@@ -4,7 +4,6 @@ import type { Matter } from '@domain/matters/matter';
 import {
   bucketByWeek,
   buildGravity,
-  buildHeatmap,
   buildPipeline,
   estimatedMinutes,
   outcomeOf,
@@ -35,9 +34,6 @@ function matter(overrides: Partial<Matter> = {}): Matter {
 function localDay(year: number, month: number, day: number, hour = 0): Date {
   return new Date(year, month - 1, day, hour, 0, 0, 0);
 }
-
-const monthFmt = new Intl.DateTimeFormat('en-GB', { month: 'short' });
-const weekdayFmt = new Intl.DateTimeFormat('en-GB', { weekday: 'short' });
 
 describe('bucketByWeek', () => {
   const now = localDay(2026, 8, 16);
@@ -70,82 +66,6 @@ describe('bucketByWeek', () => {
       2,
     );
     expect(result.reduce((sum, b) => sum + b.completed, 0)).toBe(0);
-  });
-});
-
-describe('buildHeatmap', () => {
-  const now = localDay(2026, 8, 16); // a Sunday
-
-  it('produces whole weeks, so columns are calendar weeks', () => {
-    const grid = buildHeatmap([], now, 5, 1, 'due', monthFmt, weekdayFmt);
-    expect(grid.columns).toHaveLength(5);
-    expect(grid.columns.every((column) => column.length === 7)).toBe(true);
-  });
-
-  it('starts every column on the requested first weekday', () => {
-    for (const weekStart of [0, 1, 6]) {
-      const grid = buildHeatmap([], now, 4, weekStart, 'due', monthFmt, weekdayFmt);
-      for (const column of grid.columns) {
-        expect(column[0].date.getDay()).toBe(weekStart);
-      }
-    }
-  });
-
-  it('places today in the final column', () => {
-    const grid = buildHeatmap([], now, 8, 1, 'due', monthFmt, weekdayFmt);
-    const lastColumn = grid.columns.at(-1)!;
-    expect(lastColumn.some((cell) => cell.date.getDate() === 16)).toBe(true);
-  });
-
-  it('marks future days out of range so an empty square is not read as quiet', () => {
-    const grid = buildHeatmap([], now, 3, 1, 'due', monthFmt, weekdayFmt);
-    const future = grid.columns.flat().filter((cell) => cell.date.getTime() > now.getTime());
-    expect(future.every((cell) => cell.inRange === false)).toBe(true);
-  });
-
-  it('counts against dueAt in due mode and completedAt in completed mode', () => {
-    const subject = matter({
-      status: 'done',
-      dueAt: localDay(2026, 8, 3, 9).toISOString(),
-      completedAt: localDay(2026, 8, 12, 9).toISOString(),
-    });
-
-    const due = buildHeatmap([subject], now, 6, 1, 'due', monthFmt, weekdayFmt);
-    const dueCell = due.columns.flat().find((cell) => cell.count > 0);
-    expect(dueCell!.date.getDate()).toBe(3);
-
-    const done = buildHeatmap([subject], now, 6, 1, 'completed', monthFmt, weekdayFmt);
-    const doneCell = done.columns.flat().find((cell) => cell.count > 0);
-    expect(doneCell!.date.getDate()).toBe(12);
-  });
-
-  it('labels a month only where it changes', () => {
-    const grid = buildHeatmap([], now, 12, 1, 'due', monthFmt, weekdayFmt);
-    const labels = grid.monthLabels.map((entry) => entry.label);
-    expect(new Set(labels).size).toBe(labels.length);
-  });
-
-  it('drops a month label that would overprint the one beside it', () => {
-    // Weeks starting Monday and ending Sunday 16 Aug put 27 July in column 0
-    // and 3 August in column 1 — two labels fourteen pixels apart.
-    const grid = buildHeatmap([], now, 3, 1, 'due', monthFmt, weekdayFmt);
-    expect(grid.columns[0][0].date.getDate()).toBe(27);
-
-    // The later one survives: it describes almost the whole grid, while July
-    // owns a single part-column at the edge.
-    expect(grid.monthLabels.map((entry) => entry.column)).toEqual([1]);
-    expect(grid.monthLabels[0].label).toBe(monthFmt.format(localDay(2026, 8, 3)));
-  });
-
-  it('keeps every surviving label far enough apart to be read', () => {
-    const grid = buildHeatmap([], now, 53, 1, 'due', monthFmt, weekdayFmt);
-    const columns = grid.monthLabels.map((entry) => entry.column);
-    for (let i = 1; i < columns.length; i++) {
-      expect(columns[i] - columns[i - 1]).toBeGreaterThanOrEqual(3);
-    }
-    // Still labels roughly a year's worth of months, rather than silently
-    // dropping most of them.
-    expect(columns.length).toBeGreaterThanOrEqual(11);
   });
 });
 

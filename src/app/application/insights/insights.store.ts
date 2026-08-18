@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, resource, signal } from '@angular/core';
 
 import { SessionStore } from '@application/auth/session.store';
-import { addDays, firstDayOfWeek, startOfDay } from '@application/calendar/calendar-month';
+import { addDays, startOfDay } from '@application/calendar/calendar-month';
 import { DashboardFilterStore, type DateRange } from '@application/shared/dashboard-filter.store';
 import {
   MATTER_DOMAINS,
@@ -12,27 +12,24 @@ import {
 } from '@domain/matters/matter';
 import { MAX_PAGE_SIZE, type MatterQuery, type MatterSort } from '@domain/matters/matter-query';
 import { MatterRepository } from '@domain/matters/matter.repository';
-import {
-  bucketByWeek,
-  buildGravity,
-  buildHeatmap,
-  buildPipeline,
-  projectInaction,
-  type HeatmapMode,
-} from './insights-math';
+import { bucketByWeek, buildGravity, buildPipeline, projectInaction } from './insights-math';
 
 /** The weekly chart's span. */
 export const TREND_WEEKS = 12;
 
 /**
- * The heatmap's span, in whole weeks. 53 covers a year and guarantees the grid
- * starts on a week boundary rather than mid-week.
+ * How much history the completion window covers, in whole weeks.
+ *
+ * A year. Two panels say "the last year of completions" in words — the flow
+ * diagram and the capture mix — so the fetch has to be a year or those
+ * sentences become false. The weekly chart draws the last twelve weeks of the
+ * same array.
  */
-export const HEATMAP_WEEKS = 53;
+export const HISTORY_WEEKS = 53;
 
-/** Days of history to fetch. A little over the heatmap's span, so the leftmost
- *  column is full rather than half-empty for reasons of arithmetic. */
-export const HISTORY_DAYS = HEATMAP_WEEKS * 7 + 7;
+/** Days of history to fetch. A week over the span, so the oldest bucket is a
+ *  full one rather than half-empty for reasons of arithmetic. */
+export const HISTORY_DAYS = HISTORY_WEEKS * 7 + 7;
 
 /** How far ahead "what if I did nothing" looks. */
 export const PROJECTION_DAYS = 14;
@@ -77,22 +74,6 @@ export class InsightsStore {
   readonly windowStart = computed(() => addDays(this.now(), -HISTORY_DAYS));
 
   /**
-   * Which timestamp the heatmap counts against.
-   *
-   * A toggle rather than a fixed choice, because "what fell due" and "what I
-   * cleared" are genuinely different questions and the honest answer is to let
-   * the reader pick. The default is `due`: every matter has a due date, while
-   * only completed ones have a completion date, so `completed` draws a
-   * necessarily sparser and more flattering picture.
-   */
-  private readonly heatmapModeSignal = signal<HeatmapMode>('due');
-  readonly heatmapMode = this.heatmapModeSignal.asReadonly();
-
-  setHeatmapMode(mode: HeatmapMode): void {
-    this.heatmapModeSignal.set(mode);
-  }
-
-  /**
    * The Intl tag every panel formats with.
    *
    * The ACCOUNT's language, not the browser's. Passing `undefined` to
@@ -102,25 +83,18 @@ export class InsightsStore {
    */
   readonly intlTag = computed(() => this.session.account()?.locale ?? 'en-GB');
 
-  private readonly monthFormatter = computed(
-    () => new Intl.DateTimeFormat(this.intlTag(), { month: 'short' }),
-  );
-
-  private readonly weekdayFormatter = computed(
-    () => new Intl.DateTimeFormat(this.intlTag(), { weekday: 'short' }),
-  );
-
   private readonly countsResource = resource({
     params: () => ({ tz: this.session.timeZone() }),
     loader: ({ params, abortSignal }) => this.repository.counts(params.tz, abortSignal),
   });
 
   /**
-   * A year of completions — the heatmap's raw material, and the weekly chart's.
+   * A year of completions — the weekly chart's raw material, the flow diagram's
+   * and the capture mix's.
    *
-   * One fetch for both. The weekly buckets are a `computed` that looks at the
-   * last twelve weeks of the same array, so widening the chart later costs
-   * nothing and the two views can never disagree about a day.
+   * One fetch for all three. The weekly buckets are a `computed` that looks at
+   * the last twelve weeks of the same array, so widening the chart later costs
+   * nothing and no two views can disagree about a day.
    *
    * Paged `created-desc` because the server offers no completion-ordered sort —
    * its six sorts are due, created, priority and title. That only matters at the
@@ -262,27 +236,6 @@ export class InsightsStore {
 
   readonly peakWeek = computed(() =>
     this.weeks().reduce((max, week) => Math.max(max, week.completed), 0),
-  );
-
-  /**
-   * The heatmap reads whichever set its mode is about.
-   *
-   * `due` spans everything, because an open matter's due date is as real as a
-   * finished one's; `completed` reads only the finished set, because an open
-   * matter has no completion date and including it would silently fall back to
-   * some other timestamp — which is exactly the ambiguity the mode exists to
-   * remove.
-   */
-  readonly heatmap = computed(() =>
-    buildHeatmap(
-      this.heatmapModeSignal() === 'completed' ? this.completedMatters() : this.allMatters(),
-      this.now(),
-      HEATMAP_WEEKS,
-      firstDayOfWeek(this.intlTag()),
-      this.heatmapModeSignal(),
-      this.monthFormatter(),
-      this.weekdayFormatter(),
-    ),
   );
 
   readonly pipeline = computed(() => buildPipeline(this.allMatters(), this.now()));
