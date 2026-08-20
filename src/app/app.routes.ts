@@ -36,6 +36,11 @@ export const routes: Routes = [
         loadComponent: () =>
           import('@presentation/insights/insights.page').then((m) => m.InsightsPage),
       },
+      {
+        path: 'profile',
+        loadComponent: () =>
+          import('@presentation/profile/profile.page').then((m) => m.ProfilePage),
+      },
       // The calendar is the landing surface, not a dashboard summary. It
       // answers "what is coming at me", which is the question a desktop visit
       // almost always opens with.

@@ -14,12 +14,12 @@ interface NavEntry {
 }
 
 /**
- * Navigation. Six entries eventually; three while the other surfaces live only
+ * Navigation. Six entries eventually; four while the other surfaces live only
  * on the phone.
  *
  * The icons are hand-written SVG paths rather than an icon package. A
- * dependency that ships a thousand glyphs to render three is a poor trade in a
- * bundle that has to stay small, and these three are simple enough that the
+ * dependency that ships a thousand glyphs to render four is a poor trade in a
+ * bundle that has to stay small, and these four are simple enough that the
  * path data is shorter than the import would be.
  */
 const NAV: readonly NavEntry[] = [
@@ -37,6 +37,11 @@ const NAV: readonly NavEntry[] = [
     route: '/insights',
     label: 'Insights',
     path: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+  },
+  {
+    route: '/profile',
+    label: 'Profile',
+    path: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
   },
 ];
 

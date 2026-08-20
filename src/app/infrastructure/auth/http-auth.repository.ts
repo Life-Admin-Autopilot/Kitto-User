@@ -3,66 +3,18 @@ import { Injectable, inject } from '@angular/core';
 import { AuthRejectedError } from '@domain/auth/auth-errors';
 import { AuthRepository, type Credentials, type SignUpDetails } from '@domain/auth/auth.repository';
 import type { Account, AuthenticatedSession, TokenPair } from '@domain/auth/session';
+import { toAccount, type AccountDto } from './account.mapper';
 import { ApiClient } from '../http/api.client';
 import { ApiError } from '../http/api-error';
 
 /**
- * Wire shapes. Named `…Dto` and kept private to this file so nothing outside
- * the infrastructure layer can accidentally depend on the transport's spelling
- * of a concept.
+ * Wire shape of a session. `AccountDto` and its mapper moved to
+ * `account.mapper.ts` once `PATCH /me` needed them too — the same `user` object
+ * comes back from both, and two copies of the mapping is how the two drift.
  */
-interface AccountDto {
-  id: string;
-  email: string;
-  pendingEmail?: string;
-  hasPassword?: boolean;
-  displayName?: string;
-  preferredDomains?: string[];
-  hasOnboarded?: boolean;
-  onboardingAnswers?: { id: string; question: string; answer: string }[];
-  emailVerifiedAt?: string;
-  timezone?: string;
-  locale?: string;
-  localeFollowsDevice?: boolean;
-  theme?: 'system' | 'light' | 'dark';
-  subscription?: { tier: 'free' | 'pro'; renewsAt?: string; canceledAt?: string };
-  createdAt: string;
-  updatedAt: string;
-}
-
 interface SessionDto {
   user: AccountDto;
   tokens: { accessToken: string; refreshToken: string };
-}
-
-/**
- * Map the wire account onto the domain account.
- *
- * The defaults matter. `preferredDomains` and `hasOnboarded` are optional on
- * the wire but not in the domain, because every surface that reads them would
- * otherwise need its own `?? []` — and one of them would forget. Defaulting
- * once, here, is the difference between a missing field being a mapping detail
- * and it being a runtime crash three components deep.
- */
-function toAccount(dto: AccountDto): Account {
-  return {
-    id: dto.id,
-    email: dto.email,
-    pendingEmail: dto.pendingEmail,
-    hasPassword: dto.hasPassword,
-    displayName: dto.displayName,
-    preferredDomains: dto.preferredDomains ?? [],
-    hasOnboarded: dto.hasOnboarded ?? false,
-    onboardingAnswers: dto.onboardingAnswers,
-    emailVerifiedAt: dto.emailVerifiedAt,
-    timezone: dto.timezone,
-    locale: dto.locale,
-    localeFollowsDevice: dto.localeFollowsDevice,
-    theme: dto.theme,
-    subscription: dto.subscription,
-    createdAt: dto.createdAt,
-    updatedAt: dto.updatedAt,
-  };
 }
 
 function toSession(dto: SessionDto): AuthenticatedSession {
