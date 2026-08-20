@@ -80,6 +80,27 @@ export interface MatterEstimate {
   readonly source: 'ai' | 'user';
 }
 
+/**
+ * What a matter costs, when anyone said.
+ *
+ * Minor units, like every other money figure in this product — the exponent is a
+ * property of the currency (JPY has none, KWD has three) and dividing belongs
+ * with the formatter, not the model.
+ *
+ * `source: 'user'` means a person typed this figure, by hand or as the answer to
+ * "how much is it?". Nothing may overwrite it with a guess. `direction` is what
+ * keeps a refund from summing like a payment.
+ *
+ * Absent on most matters — an amount is the exception, not the rule — so every
+ * surface must render without it.
+ */
+export interface MatterAmount {
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly source: 'ai' | 'user';
+  readonly direction: 'out' | 'in';
+}
+
 export interface MatterReminder {
   readonly at: string;
   readonly firedAt?: string;
@@ -104,6 +125,8 @@ export interface Matter {
   readonly snoozedUntil?: string;
   readonly confidence?: MatterConfidence;
   readonly estimate?: MatterEstimate;
+  /** What it costs. See MatterAmount — absent on most matters. */
+  readonly amount?: MatterAmount;
   readonly sourceVoiceNoteId?: string;
   readonly sourceDocumentId?: string;
   readonly externalSource?: MatterExternalSource;

@@ -35,6 +35,12 @@ export interface TaskDto {
   snoozedUntil?: string;
   confidence?: MatterConfidence;
   estimate?: { minMinutes: number; maxMinutes: number; source: 'ai' | 'user' };
+  amount?: {
+    amountMinor: number;
+    currency: string;
+    source: 'ai' | 'user';
+    direction: 'out' | 'in';
+  };
   sourceVoiceNoteId?: string;
   sourceDocumentId?: string;
   externalSource?: MatterExternalSource;
@@ -96,6 +102,7 @@ export function toMatter(dto: TaskDto): Matter {
     snoozedUntil: dto.snoozedUntil,
     confidence: dto.confidence,
     estimate: dto.estimate,
+    amount: dto.amount,
     sourceVoiceNoteId: dto.sourceVoiceNoteId,
     sourceDocumentId: dto.sourceDocumentId,
     externalSource: dto.externalSource,
