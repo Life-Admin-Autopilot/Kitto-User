@@ -37,8 +37,13 @@ export interface Account {
   readonly hasOnboarded: boolean;
   readonly onboardingAnswers?: readonly OnboardingAnswer[];
   readonly emailVerifiedAt?: string;
-  /** IANA zone. Absent means "trust the device". */
+  /** IANA zone. Always set on accounts created since the server got a default. */
   readonly timezone?: string;
+  /**
+   * True while `timezone` is still the server's default rather than a zone the
+   * user picked. Absent on accounts predating the flag, which read as true.
+   */
+  readonly timezoneFollowsDevice?: boolean;
   /** BCP 47 tag. Absent only on accounts predating the language picker. */
   readonly locale?: string;
   readonly localeFollowsDevice?: boolean;

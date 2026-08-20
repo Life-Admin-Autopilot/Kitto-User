@@ -8,11 +8,13 @@ import { SessionRefresher } from '@domain/auth/session-refresher';
 import { TokenStore } from '@domain/auth/token-store';
 import { FinanceRepository } from '@domain/finance/finance.repository';
 import { MatterRepository } from '@domain/matters/matter.repository';
+import { ProfileRepository } from '@domain/profile/profile.repository';
 import { HttpAuthRepository } from '@infrastructure/auth/http-auth.repository';
 import { LocalTokenStore } from '@infrastructure/auth/local-token-store';
 import { HttpFinanceRepository } from '@infrastructure/finance/http-finance.repository';
 import { authInterceptor } from '@infrastructure/http/auth.interceptor';
 import { HttpMatterRepository } from '@infrastructure/matters/http-matter.repository';
+import { HttpProfileRepository } from '@infrastructure/profile/http-profile.repository';
 
 import { routes } from './app.routes';
 
@@ -40,6 +42,7 @@ export const appConfig: ApplicationConfig = {
     { provide: AuthRepository, useClass: HttpAuthRepository },
     { provide: MatterRepository, useClass: HttpMatterRepository },
     { provide: FinanceRepository, useClass: HttpFinanceRepository },
+    { provide: ProfileRepository, useClass: HttpProfileRepository },
 
     // The rotator is application logic satisfying a domain port, so the
     // interceptor can depend on the port and never on the class.

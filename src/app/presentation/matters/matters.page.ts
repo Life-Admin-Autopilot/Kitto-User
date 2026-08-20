@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject } from '@angular/core';
 
 import { SessionStore } from '@application/auth/session.store';
+import { formatMoneyRounded } from '@application/finance/money-format';
 import { MattersStore, type GroupMode } from '@application/matters/matters.store';
 import { DashboardFilterStore } from '@application/shared/dashboard-filter.store';
 import { OverlayStore } from '@application/shared/overlay.store';
@@ -210,6 +211,16 @@ const CHANNEL_LABELS = {
                           [class.px-1.5]="imported(matter)"
                           >{{ source(matter) }}</span
                         >
+                        <!-- What it costs, stated on the row.
+                             Insights already totals these figures, and until
+                             this was here the Matters table was the one surface
+                             that held the amount and never said it. Money reads
+                             as a fact about the matter, so it sits in the meta
+                             line with the rest of them rather than in a column
+                             of its own that would be empty on most rows. -->
+                        @if (amount(matter); as money) {
+                          <span class="tabular font-semibold text-ink">{{ money }}</span>
+                        }
                         @if (matter.subtasks.length) {
                           <span class="tabular"
                             >{{ doneSteps(matter) }}/{{ matter.subtasks.length }} steps</span
@@ -403,6 +414,22 @@ export class MattersPage {
 
   protected imported(matter: Matter): boolean {
     return isImported(matter);
+  }
+
+  /**
+   * The matter's price, formatted, or null when it has none.
+   *
+   * ROUNDED, unlike the finance panel's exact figures: this is a scan-the-list
+   * read, and the piastres are noise at that altitude. Someone reconciling to
+   * the piastre is on the Insights page, where the same amount is drawn in full.
+   *
+   * Returns null rather than an empty string so the template's `@if …; as`
+   * binds once and cannot render an empty pill.
+   */
+  protected amount(matter: Matter): string | null {
+    return matter.amount
+      ? formatMoneyRounded(matter.amount.amountMinor, matter.amount.currency, this.tag())
+      : null;
   }
 
   protected doneSteps(matter: Matter): number {

@@ -123,6 +123,19 @@ export class SessionStore {
     this.signOutLocally();
   }
 
+  /**
+   * Replace the signed-in account with a fresher copy of itself.
+   *
+   * For a preference write that echoed the whole account back. Deliberately NOT
+   * a general setter: it asserts nothing about status, because the only caller
+   * is already authenticated and flipping status here would let a settings save
+   * resurrect a session that had just ended.
+   */
+  adoptAccount(account: Account): void {
+    if (this.statusSignal() !== 'authenticated') return;
+    this.accountSignal.set(account);
+  }
+
   private adopt(account: Account): void {
     this.accountSignal.set(account);
     this.statusSignal.set('authenticated');
