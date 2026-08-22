@@ -9,5 +9,5 @@
  */
 export const environment = {
   production: true,
-  apiBaseUrl: '',
+  apiBaseUrl: 'https://kitto-app.uaenorth.cloudapp.azure.com',
 } as const;
