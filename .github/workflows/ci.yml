@@ -75,6 +75,13 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted, kitto-vm]
     steps:
+      # A self-hosted runner keeps its workspace between runs — there is no
+      # fresh VM. download-artifact merges into whatever is already in `bundle`,
+      # so a file deleted from the build would survive here and then be rsynced
+      # back onto the live site. Start empty every time.
+      - name: Clean workspace
+        run: rm -rf bundle
+
       - name: Download bundle
         uses: actions/download-artifact@v4
         with:
