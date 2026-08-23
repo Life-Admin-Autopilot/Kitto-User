@@ -1,0 +1,122 @@
+# The Angular dashboard: test, build, ship the bundle to the VM.
+#
+# No Docker here. The dashboard is 30 static files that Caddy serves straight
+# off disk (see the `dash.` block in the backend's Caddyfile), so wrapping it in
+# an image would mean a container, a registry round-trip and a restart to
+# replace 165 KB of JavaScript. Building on a hosted runner and rsyncing the
+# result is faster and has no downtime at all.
+#
+# THE ONE RULE FOR THE DEPLOY STEP: rsync into the directory, never replace it.
+# /home/kitto/kitto/dashboard is bind-mounted into the Caddy container. A bind
+# mount resolves to an inode, so `rm -rf` + `mv` leaves Caddy holding the old,
+# now-unlinked directory and serving a build nobody can update — recoverable
+# only by recreating the container. `rsync --delete` edits in place and the
+# mount stays valid.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**', '.claude/**']
+  pull_request:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**', '.claude/**']
+
+concurrency:
+  group: cd-dashboard-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Angular writes the browser bundle one level below the project output dir.
+  DIST: dist/life-admin-autopilot-dashboard/browser
+  TARGET: /home/kitto/kitto/dashboard
+  ROLLBACK: /home/kitto/kitto/.rollback/dashboard
+  DASH_URL: https://dash.20-74-249-32.sslip.io/
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Angular 21's unit-test builder runs Vitest in a jsdom environment — no
+      # browser, no display server, so this needs nothing extra on the runner.
+      - name: Test
+        run: npx ng test --watch=false
+
+      # `production` is the configuration that leaves environment.ts alone. The
+      # development one has a fileReplacements entry pointing apiBaseUrl at
+      # localhost:4000, so building without this flag ships a dashboard that
+      # talks to a machine that is not there.
+      - name: Build
+        run: npx ng build --configuration production
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard
+          path: ${{ env.DIST }}
+          retention-days: 5
+          if-no-files-found: error
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, kitto-vm]
+    steps:
+      - name: Download bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard
+          path: bundle
+
+      # A sanity check before anything is overwritten. An empty or partial
+      # artifact would otherwise be rsynced straight over a working dashboard
+      # and --delete would take the old files with it.
+      - name: Verify bundle
+        run: |
+          set -euo pipefail
+          test -f bundle/index.html || { echo "::error::no index.html in the artifact"; exit 1; }
+          echo "$(find bundle -type f | wc -l) files staged"
+
+      - name: Snapshot for rollback
+        run: |
+          set -euo pipefail
+          mkdir -p "$ROLLBACK"
+          rsync -a --delete "$TARGET/" "$ROLLBACK/"
+
+      - name: Publish
+        run: |
+          set -euo pipefail
+          rsync -a --delete bundle/ "$TARGET/"
+          echo "published $(find "$TARGET" -type f | wc -l) files"
+
+      - name: Health gate
+        id: health
+        run: |
+          set -uo pipefail
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$DASH_URL" || echo 000)
+            if [ "$code" = "200" ]; then echo "healthy (HTTP 200)"; exit 0; fi
+            sleep 2
+          done
+          echo "::error::dashboard did not return 200 from $DASH_URL"
+          exit 1
+
+      - name: Roll back
+        if: failure() && steps.health.outcome == 'failure'
+        run: |
+          set -euo pipefail
+          echo "::warning::restoring the previous bundle"
+          rsync -a --delete "$ROLLBACK/" "$TARGET/"
